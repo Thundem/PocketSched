@@ -126,7 +126,11 @@ export default function DayScheduleScreen() {
         data={lessons}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <LessonCard lesson={item} isActive={item.id === activeLessonId} />
+          <LessonCard 
+            lesson={item} 
+            isActive={item.id === activeLessonId} 
+            onDeleteSuccess={fetchLessons} 
+          />
         )}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={renderEmptyState}

@@ -1,17 +1,61 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { Lesson } from '../db/schema';
 import { Ionicons } from '@expo/vector-icons';
+import { deleteLessonById } from '../db/database';
 
 interface Props {
   lesson: Lesson;
-  isActive?: boolean; // Для підсвічування поточної пари
+  isActive?: boolean;
+  onDeleteSuccess?: () => void; 
 }
 
-export default function LessonCard({ lesson, isActive }: Props) {
+export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props) {
+  const navigation = useNavigation<any>();
+
+  const handleLongPress = () => {
+    Alert.alert(
+      'Керування парою',
+      `Що ви хочете зробити з предметом "${lesson.subject_name}"?`,
+      [
+        {
+          text: 'Скасувати',
+          style: 'cancel',
+        },
+        {
+          text: '✏️ Редагувати',
+          onPress: () => {
+            navigation.navigate('AddLesson', { lesson });
+          }
+        },
+        {
+          text: '❌ Видалити',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteLessonById(lesson.id);
+              if (onDeleteSuccess) {
+                onDeleteSuccess();
+              }
+            } catch (error) {
+              console.error("Failed to delete lesson:", error);
+              Alert.alert('Помилка', 'Не вдалося видалити пару.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   return (
-    <View style={[styles.card, isActive && styles.cardActive]}>
+    <TouchableOpacity 
+      activeOpacity={0.8} 
+      onLongPress={handleLongPress}
+      delayLongPress={400} // Час затримки для спрацьовування "утримання"
+      style={[styles.card, isActive && styles.cardActive]}
+    >
       {isActive && <View style={styles.activeIndicator} />}
       
       <View style={styles.timeColumn}>
@@ -46,7 +90,7 @@ export default function LessonCard({ lesson, isActive }: Props) {
           <Text style={styles.detailsText} numberOfLines={1}>{lesson.teacher}</Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 

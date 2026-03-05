@@ -1,31 +1,32 @@
 import * as ImagePicker from 'expo-image-picker';
 import { Lesson } from '../db/schema';
 import { insertLesson, clearAllLessons } from '../db/database';
-
-// Тимчасовий мок-перехід доки ми знаходимось в Expo Go.
-// Для справжнього офлайн Google ML Kit необхідно зробити "npx expo prebuild"
-// та використовувати: import TextRecognition from '@react-native-ml-kit/text-recognition';
+import TextRecognition from '@react-native-ml-kit/text-recognition';
 
 /**
  * Функція для розпізнавання тексту з фото розкладу та його обробки 
  * алгоритмом видобування полів (парсинг: час, аудиторія, тиждень і тд.)
  */
 export const processScheduleImage = async (imageUri: string, dayOfWeek: number) => {
-  console.log('Початок OCR-сканування файлу:', imageUri);
+  console.log('Початок справжнього OCR-сканування файлу:', imageUri);
   
-  // TODO: Тут буде реальний виклик до Google ML Kit:
-  // const result = await TextRecognition.recognize(imageUri);
-  // const textBlocks = result.blocks.map(b => b.text);
-  
-  // Нині ми спершу згенеруємо "сирий розпізнаний текст", що міг би зчитати ML Kit:
-  // Цей текст відповідатиме одному дню.
-  const rawOcrText = [
-    "08:30 10:05", "Вища математика Л", "Ч", "Петренко", "ауд. 402",
-    "10:25 12:00", "Програмування Лаб", "Знам", "Іванов", "ауд. 211",
-    "12:20 13:55", "Web-дизайн ПрС", "Сидоренко", "онлайн"
-  ].join('\n');
+  let rawOcrText = '';
 
-  console.log('Отриманий текст з OCR:\n', rawOcrText);
+  try {
+    // Виклик нативного Google ML Kit 🚀
+    const result = await TextRecognition.recognize(imageUri);
+    
+    // Формуємо текст з отриманих блоків для подальшого парсингу
+    rawOcrText = result.blocks.map(block => block.text).join('\n');
+    console.log('Отриманий текст з ML Kit:\n', rawOcrText);
+
+    if (!rawOcrText.trim()) {
+      throw new Error("Не знайдено тексту на зображенні");
+    }
+  } catch (error) {
+    console.error("Помилка розпізнавання TextRecognition:", error);
+    throw error;
+  }
 
   // Наш алгоритм парсингу
   // Правила:

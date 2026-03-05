@@ -62,3 +62,30 @@ export const clearAllLessons = async () => {
   const db = await SQLite.openDatabaseAsync('pocketsched.db');
   await db.runAsync('DELETE FROM lessons');
 };
+
+export const deleteLessonById = async (id: string) => {
+  const db = await SQLite.openDatabaseAsync('pocketsched.db');
+  await db.runAsync('DELETE FROM lessons WHERE id = ?', [id]);
+};
+
+export const updateLesson = async (lesson: Lesson) => {
+  const db = await SQLite.openDatabaseAsync('pocketsched.db');
+  await db.runAsync(
+    `UPDATE lessons 
+     SET subject_name = ?, lesson_type = ?, teacher = ?, room_or_link = ?, start_time = ?, end_time = ?, day_of_week = ?, subgroup = ?, week_type = ? 
+     WHERE id = ?`,
+    [
+      lesson.subject_name,
+      lesson.lesson_type,
+      lesson.teacher,
+      lesson.room_or_link,
+      lesson.start_time,
+      lesson.end_time,
+      lesson.day_of_week,
+      lesson.subgroup || null,
+      lesson.week_type,
+      lesson.id
+    ]
+  );
+};
+

@@ -64,7 +64,12 @@ export default function WeekScreen() {
             <Text style={styles.headerText}>{title}</Text>
           </View>
         )}
-        renderItem={({ item }) => <LessonCard lesson={item} />}
+        renderItem={({ item }) => (
+          <LessonCard 
+            lesson={item} 
+            onDeleteSuccess={fetchWeekLessons} 
+          />
+        )}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={renderEmptyState}
         stickySectionHeadersEnabled={false}

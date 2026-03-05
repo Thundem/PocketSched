@@ -1,21 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
-import { insertLesson } from '../db/database';
-import { WeekType } from '../db/schema';
+import { insertLesson, updateLesson } from '../db/database';
+import { WeekType, Lesson } from '../db/schema';
 
 export default function AddLessonScreen() {
   const navigation = useNavigation();
+  const route = useRoute<any>();
+  // Отримуємо пару для редагування, якщо вона була передана через навігацію
+  const editLesson = route.params?.lesson as Lesson | undefined;
 
-  const [subjectName, setSubjectName] = useState('');
-  const [teacher, setTeacher] = useState('');
-  const [room, setRoom] = useState('');
-  const [startTime, setStartTime] = useState('08:30');
-  const [endTime, setEndTime] = useState('10:05');
-  const [lessonType, setLessonType] = useState('Л');
-  const [weekType, setWeekType] = useState<WeekType>('ALL');
-  const [dayOfWeek, setDayOfWeek] = useState(1);
+  const [subjectName, setSubjectName] = useState(editLesson?.subject_name || '');
+  const [teacher, setTeacher] = useState(editLesson?.teacher || '');
+  const [room, setRoom] = useState(editLesson?.room_or_link || '');
+  const [startTime, setStartTime] = useState(editLesson?.start_time || '08:30');
+  const [endTime, setEndTime] = useState(editLesson?.end_time || '10:05');
+  const [lessonType, setLessonType] = useState(editLesson?.lesson_type || 'Л');
+  const [weekType, setWeekType] = useState<WeekType>(editLesson?.week_type || 'ALL');
+  const [dayOfWeek, setDayOfWeek] = useState(editLesson?.day_of_week || 1);
+
+  // Динамічно міняємо заголовок вікна, в залежності від того, це редагування чи створення
+  useEffect(() => {
+    navigation.setOptions({ title: editLesson ? 'Редагувати пару' : 'Додати пару' });
+  }, [editLesson, navigation]);
 
   const handleSave = async () => {
     if (!subjectName || !startTime || !endTime) {
@@ -24,8 +32,8 @@ export default function AddLessonScreen() {
     }
 
     try {
-      await insertLesson({
-        id: Math.random().toString(),
+      const lessonData: Lesson = {
+        id: editLesson ? editLesson.id : Math.random().toString(),
         subject_name: subjectName,
         lesson_type: lessonType,
         teacher,
@@ -34,7 +42,14 @@ export default function AddLessonScreen() {
         end_time: endTime,
         day_of_week: dayOfWeek,
         week_type: weekType
-      });
+      };
+
+      if (editLesson) {
+        await updateLesson(lessonData);
+      } else {
+        await insertLesson(lessonData);
+      }
+      
       navigation.goBack();
     } catch (e) {
       Alert.alert('Помилка', 'Не вдалося зберегти пару');
