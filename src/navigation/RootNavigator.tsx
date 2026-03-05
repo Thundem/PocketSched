@@ -8,6 +8,7 @@ import { TouchableOpacity } from 'react-native';
 import ScheduleTabs from './ScheduleNavigator';
 import SettingsScreen from '../screens/SettingsScreen';
 import AddLessonScreen from '../screens/AddLessonScreen';
+import CropScreen from '../screens/CropScreen';
 import { colors } from '../theme/colors';
 
 const Tab = createBottomTabNavigator();
@@ -51,6 +52,11 @@ function ScheduleStack() {
         name="AddLesson" 
         component={AddLessonScreen} 
         options={{ title: 'Додати пару', presentation: 'modal' }} 
+      />
+      <Stack.Screen
+        name="CropScreen"
+        component={CropScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

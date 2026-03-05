@@ -1,10 +1,27 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { Lesson } from '../db/schema';
 import { Ionicons } from '@expo/vector-icons';
 import { deleteLessonById } from '../db/database';
+
+/** Скорочує повне ім'я викладача до формату "Прізвище І.П."
+ * Напр.: "доцент Іваненко Іван Петрович" → "Іваненко І.П." */
+function abbreviateTeacher(name: string): string {
+  if (!name || name === 'Невідомо') return name;
+  const cleaned = name
+    .replace(/\(.*?\)/g, '')   // видаляємо все у дужках (зовн., щось)
+    .replace(/\[.*?\]/g, '')   // видаляємо квадратні дужки
+    .replace(/^(доцент|асистент|професор|старший викладач|викладач)\s*/gi, '')
+    .trim();
+  // Лишаємо тільки слова що починаються на кириличну літеру
+  const parts = cleaned.split(/\s+/).filter(p => /^[А-ЯІЇЄа-яіїє]/i.test(p));
+  if (parts.length < 2) return cleaned.trim() || name;
+  // Прізвище + перші 2 ініціали (ім'я та по-батькові)
+  const initials = parts.slice(1, 3).map((p: string) => p.charAt(0).toUpperCase() + '.').join('');
+  return `${parts[0]} ${initials}`;
+}
 
 interface Props {
   lesson: Lesson;
@@ -14,33 +31,24 @@ interface Props {
 
 export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props) {
   const navigation = useNavigation<any>();
+  const [detailVisible, setDetailVisible] = useState(false);
 
-  const handleLongPress = () => {
+  const handleDelete = () => {
+    setDetailVisible(false);
     Alert.alert(
-      'Керування парою',
-      `Що ви хочете зробити з предметом "${lesson.subject_name}"?`,
+      'Видалити пару?',
+      `Видалити "${lesson.subject_name}"?`,
       [
+        { text: 'Скасувати', style: 'cancel' },
         {
-          text: 'Скасувати',
-          style: 'cancel',
-        },
-        {
-          text: '✏️ Редагувати',
-          onPress: () => {
-            navigation.navigate('AddLesson', { lesson });
-          }
-        },
-        {
-          text: '❌ Видалити',
+          text: 'Видалити',
           style: 'destructive',
           onPress: async () => {
             try {
               await deleteLessonById(lesson.id);
-              if (onDeleteSuccess) {
-                onDeleteSuccess();
-              }
+              if (onDeleteSuccess) onDeleteSuccess();
             } catch (error) {
-              console.error("Failed to delete lesson:", error);
+              console.error('Failed to delete lesson:', error);
               Alert.alert('Помилка', 'Не вдалося видалити пару.');
             }
           },
@@ -50,10 +58,10 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
   };
 
   return (
-    <TouchableOpacity 
-      activeOpacity={0.8} 
-      onLongPress={handleLongPress}
-      delayLongPress={400} // Час затримки для спрацьовування "утримання"
+    <>
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => setDetailVisible(true)}
       style={[styles.card, isActive && styles.cardActive]}
     >
       {isActive && <View style={styles.activeIndicator} />}
@@ -77,6 +85,11 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
                 </Text>
               </View>
             )}
+            {lesson.subgroup && (
+              <View style={[styles.weekBadge, { backgroundColor: '#42A5F5' }]}>
+                <Text style={styles.weekText}>{lesson.subgroup}пг</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -87,10 +100,77 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
 
         <View style={styles.detailsRow}>
           <Ionicons name="person-outline" size={16} color={colors.inactive} />
-          <Text style={styles.detailsText} numberOfLines={1}>{lesson.teacher}</Text>
+          <Text style={styles.detailsText} numberOfLines={1}>{abbreviateTeacher(lesson.teacher)}</Text>
         </View>
       </View>
     </TouchableOpacity>
+
+    <Modal
+      visible={detailVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setDetailVisible(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setDetailVisible(false)}
+      >
+        <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalSubject}>{lesson.subject_name}</Text>
+
+          <View style={styles.modalRow}>
+            <Ionicons name="time-outline" size={18} color={colors.inactive} />
+            <Text style={styles.modalInfoText}>{lesson.start_time} – {lesson.end_time}</Text>
+          </View>
+          <View style={styles.modalRow}>
+            <Ionicons name="school-outline" size={18} color={colors.inactive} />
+            <Text style={styles.modalInfoText}>{lesson.lesson_type}</Text>
+          </View>
+          <View style={styles.modalRow}>
+            <Ionicons name="person-outline" size={18} color={colors.inactive} />
+            <Text style={styles.modalInfoText}>{lesson.teacher}</Text>
+          </View>
+          <View style={styles.modalRow}>
+            <Ionicons name="location-outline" size={18} color={colors.inactive} />
+            <Text style={styles.modalInfoText}>{lesson.room_or_link}</Text>
+          </View>
+          {lesson.subgroup ? (
+            <View style={styles.modalRow}>
+              <Ionicons name="people-outline" size={18} color={colors.inactive} />
+              <Text style={styles.modalInfoText}>Підгрупа {lesson.subgroup}</Text>
+            </View>
+          ) : null}
+          {lesson.week_type !== 'ALL' ? (
+            <View style={styles.modalRow}>
+              <Ionicons name="calendar-outline" size={18} color={colors.inactive} />
+              <Text style={styles.modalInfoText}>
+                {lesson.week_type === 'NUMERATOR' ? 'Чисельник' : 'Знаменник'}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.modalActions}>
+            <TouchableOpacity
+              style={styles.modalBtnEdit}
+              onPress={() => {
+                setDetailVisible(false);
+                navigation.navigate('AddLesson', { lesson });
+              }}
+            >
+              <Ionicons name="create-outline" size={20} color="#fff" />
+              <Text style={styles.modalBtnText}>Редагувати</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalBtnDelete} onPress={handleDelete}>
+              <Ionicons name="trash-outline" size={20} color="#fff" />
+              <Text style={styles.modalBtnText}>Видалити</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+    </>
   );
 }
 
@@ -198,5 +278,72 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginLeft: 6,
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 36,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: colors.separator,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  modalSubject: {
+    color: colors.onBackground,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  modalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  modalInfoText: {
+    color: colors.onSurface,
+    fontSize: 15,
+    marginLeft: 10,
+    flex: 1,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20,
+  },
+  modalBtnEdit: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  modalBtnDelete: {
+    flex: 1,
+    backgroundColor: '#c0392b',
+    borderRadius: 10,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  modalBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
   },
 });
