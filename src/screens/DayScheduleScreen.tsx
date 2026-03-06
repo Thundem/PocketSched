@@ -5,7 +5,7 @@ import { colors } from '../theme/colors';
 import { Lesson } from '../db/schema';
 import LessonCard from '../components/LessonCard';
 import { getLessonsByDay, clearLessonsByDay } from '../db/database';
-import * as ImagePicker from 'expo-image-picker';
+import { getHiddenSubgroup } from '../services/settings';
 import { TimeEngine } from '../services/timeEngine';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -43,7 +43,14 @@ export default function DayScheduleScreen() {
   const fetchLessons = async () => {
     setIsLoading(true);
     try {
-      const fetchedLessons = await getLessonsByDay(targetDayOfWeek);
+      const hiddenSub = await getHiddenSubgroup();
+      const targetDate = new Date();
+      if (isTomorrow) targetDate.setDate(targetDate.getDate() + 1);
+      const weekFilter = timeEngine.getCurrentWeekType(targetDate);
+      const raw = await getLessonsByDay(targetDayOfWeek);
+      const fetchedLessons = raw
+        .filter(l => l.week_type === 'ALL' || l.week_type === weekFilter)
+        .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
       setLessons(fetchedLessons);
       updateActiveLesson(fetchedLessons);
     } catch (e) {
@@ -73,24 +80,7 @@ export default function DayScheduleScreen() {
   }, [lessons, isTomorrow, updateActiveLesson]);
 
   const handleScanSchedule = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Помилка', 'Для сканування розкладу потрібен доступ до фото.'); 
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 1,
-    });
-
-    if (!result.canceled && result.assets && result.assets.length > 0) {
-      navigation.navigate('CropScreen', {
-        imageUri: result.assets[0].uri,
-        targetDay: targetDayOfWeek,
-      });
-    }
+    // Перенесено у хедер RootNavigator — доступно з будь-якої вкладки
   };
 
   const handleClearDay = () => {
@@ -126,7 +116,7 @@ export default function DayScheduleScreen() {
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyText}>{isTomorrow ? 'Завтра пар немає 🎉' : 'Сьогодні пар немає 🎉'}</Text>
       {!isTomorrow && (
-        <Text style={styles.emptyHint}>Натисніть кнопку нижче, щоб відсканувати розклад</Text>
+        <Text style={styles.emptyHint}>Натисніть іконку камери вгорі, щоб відсканувати розклад</Text>
       )}
     </View>
   );
@@ -154,12 +144,6 @@ export default function DayScheduleScreen() {
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={renderEmptyState}
       />
-      {!isTomorrow && (
-        <TouchableOpacity style={styles.fab} onPress={handleScanSchedule}>
-          <Ionicons name="camera-outline" size={22} color="#fff" />
-          <Text style={styles.fabText}>Сканувати</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
@@ -195,27 +179,5 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
     paddingHorizontal: 32,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 24,
-    right: 20,
-    backgroundColor: colors.primary,
-    borderRadius: 28,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-  },
-  fabText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-    marginLeft: 8,
   },
 });

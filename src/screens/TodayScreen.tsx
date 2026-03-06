@@ -4,8 +4,12 @@ import { colors } from '../theme/colors';
 import { Lesson } from '../db/schema';
 import LessonCard from '../components/LessonCard';
 import { getLessonsByDay, insertLesson, clearAllLessons } from '../db/database';
+import { getHiddenSubgroup } from '../services/settings';
+import { TimeEngine } from '../services/timeEngine';
 import * as ImagePicker from 'expo-image-picker';
 import { processScheduleImage } from '../services/ocrScanner';
+
+const timeEngine = new TimeEngine();
 
 export default function TodayScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -17,7 +21,12 @@ export default function TodayScreen() {
   const fetchLessons = async () => {
     setIsLoading(true);
     try {
-      const fetchedLessons = await getLessonsByDay(todayDayOfWeek);
+      const hiddenSub = await getHiddenSubgroup();
+      const weekFilter = timeEngine.getCurrentWeekType(new Date());
+      const raw = await getLessonsByDay(todayDayOfWeek);
+      const fetchedLessons = raw
+        .filter(l => l.week_type === 'ALL' || l.week_type === weekFilter)
+        .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
       setLessons(fetchedLessons);
     } catch (e) {
       console.error(e);

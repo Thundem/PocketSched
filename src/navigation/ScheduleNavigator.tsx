@@ -20,6 +20,7 @@ export default function ScheduleTabs() {
       <TopTab.Screen name="Today" component={DayScheduleScreen} options={{ tabBarLabel: 'Сьогодні' }} />
       <TopTab.Screen name="Tomorrow" component={DayScheduleScreen} options={{ tabBarLabel: 'Завтра' }} />
       <TopTab.Screen name="Week" component={WeekScreen} options={{ tabBarLabel: 'Тиждень' }} />
+      <TopTab.Screen name="NextWeek" component={WeekScreen} options={{ tabBarLabel: 'Наст. тиждень' }} />
     </TopTab.Navigator>
   );
 }

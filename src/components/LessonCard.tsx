@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
-import { Lesson } from '../db/schema';
+import { Lesson, WeekType } from '../db/schema';
 import { Ionicons } from '@expo/vector-icons';
-import { deleteLessonById } from '../db/database';
+import { deleteLessonById, updateLesson } from '../db/database';
 
 /** Скорочує повне ім'я викладача до формату "Прізвище І.П."
  * Напр.: "доцент Іваненко Іван Петрович" → "Іваненко І.П." */
@@ -32,6 +32,9 @@ interface Props {
 export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props) {
   const navigation = useNavigation<any>();
   const [detailVisible, setDetailVisible] = useState(false);
+  const [dayPickerVisible, setDayPickerVisible] = useState(false);
+
+  const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
 
   const handleDelete = () => {
     setDetailVisible(false);
@@ -62,6 +65,7 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() => setDetailVisible(true)}
+      onLongPress={() => setDayPickerVisible(true)}
       style={[styles.card, isActive && styles.cardActive]}
     >
       {isActive && <View style={styles.activeIndicator} />}
@@ -150,6 +154,49 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
               </Text>
             </View>
           ) : null}
+
+          {/* Швидка зміна типу тижня */}
+          <View style={styles.weekTypeRow}>
+            <Text style={styles.weekTypeLabel}>Тиждень:</Text>
+            {([{ val: 'ALL', label: 'Кожен' }, { val: 'NUMERATOR', label: 'Чисельник' }, { val: 'DENOMINATOR', label: 'Знаменник' }] as { val: WeekType; label: string }[]).map(({ val, label }) => (
+              <TouchableOpacity
+                key={val}
+                style={[styles.weekTypeBtn, lesson.week_type === val && styles.weekTypeBtnActive]}
+                onPress={async () => {
+                  await updateLesson({ ...lesson, week_type: val });
+                  if (onDeleteSuccess) onDeleteSuccess();
+                  setDetailVisible(false);
+                }}
+              >
+                <Text style={[styles.weekTypeBtnText, lesson.week_type === val && styles.weekTypeBtnTextActive]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Перенести на інший день */}
+          <View style={styles.weekTypeRow}>
+            <Text style={styles.weekTypeLabel}>День:</Text>
+            {DAY_NAMES.map((name, idx) => {
+              const dayNum = idx + 1;
+              return (
+                <TouchableOpacity
+                  key={dayNum}
+                  style={[styles.weekTypeBtn, lesson.day_of_week === dayNum && styles.weekTypeBtnActive]}
+                  onPress={async () => {
+                    await updateLesson({ ...lesson, day_of_week: dayNum });
+                    if (onDeleteSuccess) onDeleteSuccess();
+                    setDetailVisible(false);
+                  }}
+                >
+                  <Text style={[styles.weekTypeBtnText, lesson.day_of_week === dayNum && styles.weekTypeBtnTextActive]}>
+                    {name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
           <View style={styles.modalActions}>
             <TouchableOpacity
@@ -345,5 +392,37 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 15,
+  },
+  weekTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    flexWrap: 'wrap',
+  },
+  weekTypeLabel: {
+    color: colors.inactive,
+    fontSize: 14,
+    marginRight: 4,
+  },
+  weekTypeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.inactive,
+    backgroundColor: colors.surface,
+  },
+  weekTypeBtnActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryVariant,
+  },
+  weekTypeBtnText: {
+    color: colors.inactive,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  weekTypeBtnTextActive: {
+    color: colors.primary,
   },
 });

@@ -1,21 +1,36 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, SectionList, ActivityIndicator } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
-import { Lesson } from '../db/schema';
+import { Lesson, WeekType } from '../db/schema';
 import LessonCard from '../components/LessonCard';
 import { getAllLessons } from '../db/database';
+import { getHiddenSubgroup } from '../services/settings';
+import { TimeEngine } from '../services/timeEngine';
 
 const DAYS_OF_WEEK = ['Понеділок', 'Вівторок', 'Середа', 'Четвер', 'П\'ятниця', 'Субота', 'Неділя'];
+const timeEngine = new TimeEngine();
 
 export default function WeekScreen() {
+  const route = useRoute();
+  const isNextWeek = route.name === 'NextWeek';
+  const currentWeekType = timeEngine.getCurrentWeekType();
+  const weekFilter: WeekType = isNextWeek
+    ? (currentWeekType === 'NUMERATOR' ? 'DENOMINATOR' : 'NUMERATOR')
+    : currentWeekType;
+  const weekLabel = weekFilter === 'NUMERATOR' ? 'Чисельник (непарний)' : 'Знаменник (парний)';
+
   const [sections, setSections] = useState<{title: string, data: Lesson[]}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchWeekLessons = async () => {
     setIsLoading(true);
     try {
-      const allLessons = await getAllLessons();
+      const hiddenSub = await getHiddenSubgroup();
+      const rawLessons = await getAllLessons();
+      const allLessons = rawLessons
+        .filter(l => l.week_type === 'ALL' || l.week_type === weekFilter)
+        .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
       
       // Групуємо уроки по днях тижня
       const groups = DAYS_OF_WEEK.map((dayName, index) => {
@@ -56,6 +71,9 @@ export default function WeekScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.weekBanner}>
+        <Text style={styles.weekBannerText}>{weekLabel}</Text>
+      </View>
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
@@ -112,5 +130,18 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 18,
     fontWeight: 'bold',
-  }
+  },
+  weekBanner: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.separator,
+    alignItems: 'center',
+  },
+  weekBannerText: {
+    color: colors.inactive,
+    fontSize: 13,
+    fontWeight: '500',
+  },
 });

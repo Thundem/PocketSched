@@ -165,10 +165,10 @@ const extractLessonFromUkrText = (text: string, dayOfWeek: number): Lesson | nul
     endTime = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
   }
 
-  // Витягуємо тип тижня
+  // Витягуємо тип тижня (без \b — кирилиця не є word char у JS regex)
   let weekType: 'ALL' | 'NUMERATOR' | 'DENOMINATOR' = 'ALL';
-  if (/\b(Ч|Чис|Чисельник|підгр\. 1|1 підгр)\b/i.test(text)) weekType = 'NUMERATOR';
-  else if (/\b(З|Знам|Знаменник|підгр\. 2|2 підгр)\b/i.test(text)) weekType = 'DENOMINATOR';
+  if (/Чисельник/i.test(text)) weekType = 'NUMERATOR';
+  else if (/Знаменник/i.test(text)) weekType = 'DENOMINATOR';
 
   // Витягуємо підгрупу (1 або 2)
   let subgroup: string | undefined = undefined;
@@ -178,12 +178,12 @@ const extractLessonFromUkrText = (text: string, dayOfWeek: number): Lesson | nul
   // Витягуємо індикатор "1 півпара" або "2 півпара"
   let halfLesson = '';
   const halfMatch = text.match(/([12])\s*півпара/i);
-  if (halfMatch) halfLesson = ` • ${halfMatch[1]}П`;
+  if (halfMatch) halfLesson = ` • ${halfMatch[1]} півпара`;
 
-  // Витягуємо тип заняття
+  // Витягуємо тип заняття (без \b — кирилиця не word char у JS)
   let lessonType = 'Лекція';
-  if (/\b(Лаб|ЛР|Лабораторна)\b/i.test(text)) lessonType = 'Лабораторна';
-  else if (/\b(ПрС|Прак|Практика)\b/i.test(text)) lessonType = 'Практика';
+  if (/(Лаб|ЛР|Лабораторна)/i.test(text)) lessonType = 'Лабораторна';
+  else if (/(ПрС|Прак|Практика)/i.test(text)) lessonType = 'Практика';
   lessonType = lessonType + halfLesson;
 
   // Очищаємо текст від службових маркерів
@@ -192,7 +192,8 @@ const extractLessonFromUkrText = (text: string, dayOfWeek: number): Lesson | nul
     .replace(/([01]?\d|2[0-3]):[0-5]\d/gi, '')
     .replace(/[12]\s*півпара\s*/gi, '')
     .replace(/підгр[\s.]*\d/gi, '')
-    .replace(/\b(Лаб|ЛР|Лабораторна|ПрС|Прак|Практика|Лекція|Лек|\(\)|\[\])\b/gi, '')
+    .replace(/\(\s*\)/g, '')             // видаляємо порожні дужки "()" або "( )"
+    .replace(/(Лаб|ЛР|Лабораторна|ПрС|Прак|Практика|Лекція|Лек)/gi, '')
     // Видаляємо назви місяців і дати щоб вони не потрапляли в назву предмету
     .replace(/\b\d{1,2}[.\/]\d{1,2}([.\/]\d{2,4})?\b/g, '')
     .replace(/\b(січня|лютого|березня|квітня|травня|червня|липня|серпня|вересня|жовтня|листопада|грудня)\b/gi, '')
@@ -201,37 +202,40 @@ const extractLessonFromUkrText = (text: string, dayOfWeek: number): Lesson | nul
     .replace(/\t/g, ' ')
     .trim();
 
-  // Шукаємо викладача (починається з посади)
+  // Шукаємо аудиторію ПЕРШОЮ (до викладача) — інакше "N12/T" потрапляє в ім'я
+  // Формати: N12/T, 213/Т, 5/Б, Н12/1, тощо
+  let room = 'Не вказано';
+  const roomMatches = cleanText.match(/[А-ЯІЇЄа-яіїєA-Za-z0-9]{1,4}\/[А-ЯІЇЄа-яіїєA-Za-z0-9]{1,3}/);
+  if (roomMatches) {
+    room = roomMatches[0].trim();
+    cleanText = cleanText.replace(room, '').trim();
+  }
+
+  // Шукаємо викладача (починається з посади) — після видалення аудиторії
+  // Захоплюємо лише rank + до 3 слів (Прізвище Ім'я По-батькові), щоб не прихопити "Збірна група" тощо
   let teacher = 'Невідомо';
-  const teacherMatches = cleanText.match(/(доцент|асистент|професор|старший викладач|викладач)[^\d]+/i);
+  const teacherMatches = cleanText.match(/(доцент|асистент|професор|старший викладач|викладач)(?:\s+[А-ЯІЇЄA-Za-z][^\s,]*){1,3}/i);
   if (teacherMatches) {
      teacher = teacherMatches[0].trim();
      cleanText = cleanText.replace(teacher, '').trim();
   }
 
-  // Шукаємо аудиторію (Наприклад 213/Т, 5/Б, Н12/Т)
-  let room = 'Не вказано';
-  const roomMatches = cleanText.match(/([0-9A-ZА-ЯІЇЄ]{1,4}\/[A-ZА-ЯІЇЄ]{1,3}|[a-zA-ZА-Яа-яіє]{1,2}[0-9]{1,3}\/[a-zA-ZА-Яа-яіє]+|[0-9]{3}[A-ZА-ЯІЇЄ]?)/i);
-  if (roomMatches) {
-     room = roomMatches[0].trim();
-     cleanText = cleanText.replace(room, '').trim();
-  }
-
   // Те, що залишилось - це назва предмету
-  const words = cleanText.split(' ').filter(w => w.length > 2);
+  // Фільтруємо лише зовсім порожні токени (пробіли, дефіси)
+  const words = cleanText.split(' ').filter(w => w.length > 0 && /[А-ЯІЇЄа-яіїєA-Za-z0-9]/.test(w));
 
   // Якщо після очищення не залишилось значущого тексту — клітинка порожня, пару пропускаємо
-  // (достатньо мінімум 2 слова або 1 слово довше 4 символів, щоб вважати це назвою предмету)
   const hasSubject = words.length >= 2 || (words.length === 1 && words[0].length > 4);
   if (!hasSubject) return null;
 
-  const subjectName = words.slice(0, 6).join(' ');
+  // Беремо до 10 слів, щоб не обрізати довгі назви
+  const subjectName = words.slice(0, 10).join(' ');
 
   return {
     id: Math.random().toString(),
-    subject_name: subjectName.substring(0, 60),
+    subject_name: subjectName.substring(0, 80),
     lesson_type: lessonType,
-    teacher: teacher.length > 40 ? teacher.substring(0, 40) + '...' : teacher,
+    teacher: teacher.length > 70 ? teacher.substring(0, 70) + '...' : teacher,
     room_or_link: room.length > 20 ? room.substring(0, 20) + '...' : room,
     start_time: startTime,
     end_time: endTime,

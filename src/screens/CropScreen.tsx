@@ -1,18 +1,18 @@
 import React, { useState, useRef, useMemo } from 'react';
 import {
   View, Image, StyleSheet, TouchableOpacity, Text,
-  PanResponder, Dimensions, ActivityIndicator, Alert, SafeAreaView,
+  PanResponder, Dimensions, ActivityIndicator, Alert,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { processScheduleImage } from '../services/ocrScanner';
 import { colors } from '../theme/colors';
 
 const { width: SW, height: SH } = Dimensions.get('window');
-const HEADER_H  = 56;   // висота верхнього хедера
+const HEADER_H  = 56;   // висота верхнього хедера (без інсетів)
 const FOOTER_H  = 90;   // висота нижньої панелі з кнопками
 const CONTAINER_W = SW;
-const CONTAINER_H = SH - HEADER_H - FOOTER_H; // зображення між хедером і кнопками
 const HANDLE = 32;             // розмір ручки
 const MIN_CROP = 0.06;         // мінімальний розмір кадру (6%)
 
@@ -22,6 +22,10 @@ export default function CropScreen() {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { imageUri, targetDay } = route.params;
+  const insets = useSafeAreaInsets();
+
+  // Висота контейнера зображення з урахуванням статус-бару
+  const CONTAINER_H = SH - HEADER_H - FOOTER_H - insets.top;
 
   const [isLoading, setIsLoading] = useState(false);
   const [naturalSize, setNaturalSize] = useState({ w: 1, h: 1 });
@@ -107,9 +111,9 @@ export default function CropScreen() {
   const midY = (box.top  + box.bottom) / 2;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={styles.container}>
       {/* ─── Верхній хедер ─── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top, height: HEADER_H + insets.top }]}>
         <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="close" size={22} color="#fff" />
           <Text style={styles.headerBtnText}>Скасувати</Text>
@@ -184,7 +188,7 @@ export default function CropScreen() {
           )
         }
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
