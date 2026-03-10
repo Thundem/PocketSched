@@ -93,6 +93,7 @@ export default function TodayScreen() {
       <FlatList
         data={lessons}
         keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <LessonCard lesson={item} isActive={item.id === activeLessonId} />
         )}

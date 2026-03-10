@@ -66,7 +66,7 @@ export default function AddLessonScreen() {
   const weeks = [{ label: 'Кожен', val: 'ALL' }, { label: 'Чисельник', val: 'NUMERATOR' }, { label: 'Знаменник', val: 'DENOMINATOR' }];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Назва */}
       <Text style={styles.label}>Назва предмету *</Text>
       <TextInput 

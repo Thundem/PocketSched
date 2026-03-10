@@ -134,6 +134,7 @@ export default function DayScheduleScreen() {
       <FlatList
         data={lessons}
         keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <LessonCard
             lesson={item}

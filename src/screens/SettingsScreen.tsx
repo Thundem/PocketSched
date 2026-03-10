@@ -106,6 +106,7 @@ export default function SettingsScreen() {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 40 }}
       keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
     >
       <Text style={styles.header}>Налаштування</Text>
 
@@ -258,6 +259,7 @@ export default function SettingsScreen() {
               data={EMOJI_OPTIONS}
               numColumns={5}
               keyExtractor={item => item}
+              showsVerticalScrollIndicator={false}
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={[
