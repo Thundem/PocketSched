@@ -23,15 +23,15 @@ export const exportSchedule = async (): Promise<void> => {
   };
   const json = JSON.stringify(payload, null, 2);
 
-  // Спробуємо поділитись файлом .json (потребує dev-білду)
+  // Спробуємо поділитись файлом (потребує dev-білду)
   try {
     const Sharing = await import('expo-sharing');
-    const file = new File(Paths.cache, 'pocketsched_export.json');
+    const file = new File(Paths.cache, 'pocketsched_export.psched.txt');
     file.write(json);
     await Sharing.shareAsync(file.uri, {
-      mimeType: 'application/json',
+      mimeType: 'text/plain',
       dialogTitle: 'Поділитися розкладом PocketSched',
-      UTI: 'public.json',
+      UTI: 'public.plain-text',
     });
     return;
   } catch (e: any) {
@@ -81,7 +81,7 @@ export const importScheduleFromFile = async (): Promise<{ imported: number; prof
   }
 
   const result = await DocumentPicker.getDocumentAsync({
-    type: 'application/json',
+    type: ['application/json', 'text/plain'],
     copyToCacheDirectory: true,
   });
 
