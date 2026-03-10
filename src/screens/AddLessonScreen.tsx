@@ -58,7 +58,11 @@ export default function AddLessonScreen() {
   };
 
   const days = ['Пн', 'Вв', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
-  const types = ['Л', 'Лаб', 'ПрС'];
+  const types: { label: string; value: string }[] = [
+    { label: 'Л', value: 'Лекція' },
+    { label: 'Лаб', value: 'Лабораторна' },
+    { label: 'ПрС', value: 'Практика' },
+  ];
   const weeks = [{ label: 'Кожен', val: 'ALL' }, { label: 'Чисельник', val: 'NUMERATOR' }, { label: 'Знаменник', val: 'DENOMINATOR' }];
 
   return (
@@ -115,12 +119,12 @@ export default function AddLessonScreen() {
       <Text style={styles.label}>Тип пари</Text>
       <View style={styles.segmentWrap}>
         {types.map(t => (
-          <TouchableOpacity 
-            key={t} 
-            style={[styles.segmentBtn, lessonType === t && styles.segmentBtnActive]}
-            onPress={() => setLessonType(t)}
+          <TouchableOpacity
+            key={t.value}
+            style={[styles.segmentBtn, lessonType === t.value && styles.segmentBtnActive]}
+            onPress={() => setLessonType(t.value)}
           >
-            <Text style={[styles.segmentText, lessonType === t && styles.segmentTextActive]}>{t}</Text>
+            <Text style={[styles.segmentText, lessonType === t.value && styles.segmentTextActive]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
