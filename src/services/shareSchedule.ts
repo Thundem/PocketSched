@@ -26,12 +26,13 @@ export const exportSchedule = async (): Promise<void> => {
   // Спробуємо поділитись файлом (потребує dev-білду)
   try {
     const Sharing = await import('expo-sharing');
-    const file = new File(Paths.cache, 'pocketsched_export.psched.txt');
+    const file = new File(Paths.cache, 'pocketsched_export.json');
+    if (file.exists) file.delete();
     file.write(json);
     await Sharing.shareAsync(file.uri, {
-      mimeType: 'text/plain',
+      mimeType: 'application/json',
       dialogTitle: 'Поділитися розкладом PocketSched',
-      UTI: 'public.plain-text',
+      UTI: 'public.json',
     });
     return;
   } catch (e: any) {
