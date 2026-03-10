@@ -9,7 +9,7 @@ import {
   getProfile, setProfile,
 } from '../services/settings';
 import { TimeEngine } from '../services/timeEngine';
-import { exportSchedule, importScheduleFromText } from '../services/shareSchedule';
+import { exportSchedule, importScheduleFromFile, importScheduleFromText } from '../services/shareSchedule';
 
 const timeEngine = new TimeEngine();
 
@@ -66,9 +66,23 @@ export default function SettingsScreen() {
     }
   };
 
-  const handleImport = () => {
-    setImportText('');
-    setImportModalVisible(true);
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      const { imported, profileName: senderName } = await importScheduleFromFile();
+      const from = senderName ? ` від ${senderName}` : '';
+      Alert.alert('Готово', `Імпортовано ${imported} пар${from}`);
+    } catch (e: any) {
+      if (e?.message === 'NO_PICKER') {
+        // Expo Go: пікер недоступний — відкриваємо модалку з полем вводу
+        setImportText('');
+        setImportModalVisible(true);
+      } else if (e?.message !== 'CANCELLED') {
+        Alert.alert('Помилка', e?.message ?? 'Не вдалося імпортувати розклад');
+      }
+    } finally {
+      setImporting(false);
+    }
   };
 
   const confirmImport = async () => {
@@ -81,7 +95,7 @@ export default function SettingsScreen() {
       const from = senderName ? ` від ${senderName}` : '';
       Alert.alert('Готово', `Імпортовано ${imported} пар${from}`);
     } catch (e: any) {
-      Alert.alert('Помилка', e?.message ?? 'Не вдалося імпортувати розклад');
+      Alert.alert('Помилка', e?.message ?? 'Не вдалось імпортувати розклад');
     } finally {
       setImporting(false);
     }
@@ -181,7 +195,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* ── Import modal ── */}
+      {/* ── Модалка імпорту (Expo Go — немає пікера) ── */}
       <Modal
         visible={importModalVisible}
         transparent
@@ -196,7 +210,7 @@ export default function SettingsScreen() {
           <View style={styles.importSheet}>
             <Text style={styles.emojiSheetTitle}>Вставте текст розкладу</Text>
             <Text style={styles.settingDesc}>
-              Скопіюйте весь текст, надісланий другом, та вставте сюди
+              Скопіюйте весь JSON-текст, надісланий другом, та вставте сюди
             </Text>
             <TextInput
               style={styles.importInput}
