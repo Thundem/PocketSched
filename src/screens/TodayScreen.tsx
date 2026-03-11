@@ -94,6 +94,7 @@ export default function TodayScreen() {
         data={lessons}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => (
           <LessonCard lesson={item} isActive={item.id === activeLessonId} />
         )}

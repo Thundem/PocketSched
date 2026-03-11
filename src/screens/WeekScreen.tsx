@@ -91,6 +91,7 @@ export default function WeekScreen() {
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={renderEmptyState}
         stickySectionHeadersEnabled={false}
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );

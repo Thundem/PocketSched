@@ -135,6 +135,7 @@ export default function DayScheduleScreen() {
         data={lessons}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
+        showsHorizontalScrollIndicator={false}
         renderItem={({ item }) => (
           <LessonCard
             lesson={item}

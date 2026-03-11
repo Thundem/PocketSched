@@ -107,6 +107,7 @@ export default function SettingsScreen() {
       contentContainerStyle={{ paddingBottom: 40 }}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
+      showsHorizontalScrollIndicator={false}
     >
       <Text style={styles.header}>Налаштування</Text>
 
