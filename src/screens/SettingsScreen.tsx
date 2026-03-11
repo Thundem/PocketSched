@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, Switch, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, Alert, Modal, FlatList,
+  ScrollView, Alert, Modal, FlatList, InteractionManager,
 } from 'react-native';
 import { colors } from '../theme/colors';
 import {
@@ -58,6 +58,7 @@ export default function SettingsScreen() {
   const handleExport = async () => {
     setSharing(true);
     try {
+      await new Promise<void>(r => InteractionManager.runAfterInteractions(r));
       await exportSchedule();
     } catch (e: any) {
       Alert.alert('Помилка', e?.message ?? 'Не вдалося поділитися розкладом');

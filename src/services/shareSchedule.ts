@@ -26,7 +26,10 @@ export const exportSchedule = async (): Promise<void> => {
   // Спробуємо поділитись файлом (потребує dev-білду)
   try {
     const Sharing = await import('expo-sharing');
-    const file = new File(Paths.cache, 'pocketsched_export.json');
+    const date = new Date();
+    const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+    const fileName = `pocketsched_${stamp}.json`;
+    const file = new File(Paths.cache, fileName);
     if (file.exists) file.delete();
     file.write(json);
     await Sharing.shareAsync(file.uri, {
