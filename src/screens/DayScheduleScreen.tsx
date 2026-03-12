@@ -170,6 +170,7 @@ export default function DayScheduleScreen() {
         data={lessons}
         keyExtractor={(item: Lesson) => item.id}
         showsVerticalScrollIndicator={false}
+        activationDistance={10}
         onDragEnd={handleDragEnd}
         renderItem={({ item, drag }: RenderItemParams<Lesson>) => (
           <ScaleDecorator>

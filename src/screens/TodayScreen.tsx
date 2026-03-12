@@ -129,6 +129,7 @@ export default function TodayScreen() {
         data={lessons}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
+        activationDistance={10}
         onDragBegin={() => setIsReordering(true)}
         onDragEnd={handleDragEnd}
         renderItem={({ item, drag }: RenderItemParams<Lesson>) => (
