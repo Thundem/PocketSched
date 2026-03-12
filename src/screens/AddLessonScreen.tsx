@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { insertLesson, updateLesson } from '../db/database';
@@ -16,9 +16,16 @@ export default function AddLessonScreen() {
   const [room, setRoom] = useState(editLesson?.room_or_link || '');
   const [startTime, setStartTime] = useState(editLesson?.start_time || '08:30');
   const [endTime, setEndTime] = useState(editLesson?.end_time || '10:05');
-  const [lessonType, setLessonType] = useState(editLesson?.lesson_type || 'Л');
+  const [lessonType, setLessonType] = useState(
+    editLesson?.lesson_type?.replace(/\s*•\s*[12]\s*півпара\s*/gi, '').trim() || 'Лекція'
+  );
+  const [halfPart, setHalfPart] = useState<'' | '1' | '2'>(
+    (editLesson?.lesson_type?.match(/•\s*([12])\s*півпара/i)?.[1] || '') as '' | '1' | '2'
+  );
   const [weekType, setWeekType] = useState<WeekType>(editLesson?.week_type || 'ALL');
   const [dayOfWeek, setDayOfWeek] = useState(editLesson?.day_of_week || 1);
+  const [isExam, setIsExam] = useState(!!editLesson?.exam_date);
+  const [examDate, setExamDate] = useState(editLesson?.exam_date || '');
 
   // Динамічно міняємо заголовок вікна, в залежності від того, це редагування чи створення
   useEffect(() => {
@@ -26,8 +33,8 @@ export default function AddLessonScreen() {
   }, [editLesson, navigation]);
 
   const handleSave = async () => {
-    if (!subjectName || !startTime || !endTime) {
-      Alert.alert('Помилка', 'Заповніть обов\'язкові поля: Назва, Час початку та кінця');
+    if (!subjectName || !startTime || !endTime || (isExam && !examDate.trim())) {
+      Alert.alert('Помилка', 'Заповніть обов\'язкові поля');
       return;
     }
 
@@ -35,13 +42,14 @@ export default function AddLessonScreen() {
       const lessonData: Lesson = {
         id: editLesson ? editLesson.id : Math.random().toString(),
         subject_name: subjectName,
-        lesson_type: lessonType,
+        lesson_type: isExam ? 'Екзамен' : (halfPart ? `${lessonType} • ${halfPart} півпара` : lessonType),
         teacher,
         room_or_link: room,
         start_time: startTime,
         end_time: endTime,
         day_of_week: dayOfWeek,
-        week_type: weekType
+        week_type: isExam ? 'ALL' : weekType,
+        exam_date: isExam ? examDate.trim() : null,
       };
 
       if (editLesson) {
@@ -101,20 +109,6 @@ export default function AddLessonScreen() {
         </View>
       </View>
 
-      {/* День тижня */}
-      <Text style={styles.label}>День тижня</Text>
-      <View style={styles.segmentWrap}>
-        {days.map((d, index) => (
-          <TouchableOpacity 
-            key={d} 
-            style={[styles.segmentBtn, dayOfWeek === index + 1 && styles.segmentBtnActive]}
-            onPress={() => setDayOfWeek(index + 1)}
-          >
-            <Text style={[styles.segmentText, dayOfWeek === index + 1 && styles.segmentTextActive]}>{d}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
       {/* Тип пари */}
       <Text style={styles.label}>Тип пари</Text>
       <View style={styles.segmentWrap}>
@@ -129,19 +123,74 @@ export default function AddLessonScreen() {
         ))}
       </View>
 
-      {/* Тип тижня */}
-      <Text style={styles.label}>Який тиждень</Text>
-      <View style={styles.segmentWrap}>
-        {weeks.map(w => (
-          <TouchableOpacity 
-            key={w.val} 
-            style={[styles.segmentBtn, weekType === w.val && styles.segmentBtnActive]}
-            onPress={() => setWeekType(w.val as WeekType)}
-          >
-            <Text style={[styles.segmentText, weekType === w.val && styles.segmentTextActive]}>{w.label}</Text>
-          </TouchableOpacity>
-        ))}
+      {/* Це екзамен */}
+      <View style={styles.switchRow}>
+        <Text style={[styles.label, { marginTop: 0, marginBottom: 0, flex: 1 }]}>Це екзамен</Text>
+        <Switch
+          value={isExam}
+          onValueChange={setIsExam}
+          trackColor={{ false: colors.inactive, true: colors.primary }}
+          thumbColor="#fff"
+        />
       </View>
+
+      {isExam ? (
+        <>
+          <Text style={styles.label}>Дата (ДД.ММ.РРРР) *</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="25.06.2026"
+            placeholderTextColor={colors.inactive}
+            value={examDate}
+            onChangeText={setExamDate}
+            keyboardType="numeric"
+          />
+        </>
+      ) : (
+        <>
+          {/* Пів пари */}
+          <Text style={styles.label}>Пів пари</Text>
+          <View style={styles.segmentWrap}>
+            {([{ val: '' as '' | '1' | '2', label: 'Ціла' }, { val: '1' as '' | '1' | '2', label: '1пп' }, { val: '2' as '' | '1' | '2', label: '2пп' }]).map(h => (
+              <TouchableOpacity
+                key={h.val || 'full'}
+                style={[styles.segmentBtn, halfPart === h.val && styles.segmentBtnActive]}
+                onPress={() => setHalfPart(h.val)}
+              >
+                <Text style={[styles.segmentText, halfPart === h.val && styles.segmentTextActive]}>{h.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* День тижня */}
+          <Text style={styles.label}>День тижня</Text>
+          <View style={styles.segmentWrap}>
+            {days.map((d, index) => (
+              <TouchableOpacity
+                key={d}
+                style={[styles.segmentBtn, dayOfWeek === index + 1 && styles.segmentBtnActive]}
+                onPress={() => setDayOfWeek(index + 1)}
+              >
+                <Text style={[styles.segmentText, dayOfWeek === index + 1 && styles.segmentTextActive]}>{d}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Тип тижня */}
+          <Text style={styles.label}>Який тиждень</Text>
+          <View style={styles.segmentWrap}>
+            {weeks.map(w => (
+              <TouchableOpacity
+                key={w.val}
+                style={[styles.segmentBtn, weekType === w.val && styles.segmentBtnActive]}
+                onPress={() => setWeekType(w.val as WeekType)}
+              >
+                <Text style={[styles.segmentText, weekType === w.val && styles.segmentTextActive]}>{w.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
 
       <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
         <Text style={styles.saveBtnText}>Зберегти пару</Text>
@@ -216,5 +265,11 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     fontSize: 18,
     fontWeight: 'bold',
-  }
+  },
+  switchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 4,
+  },
 });

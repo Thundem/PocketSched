@@ -23,9 +23,11 @@ export default function TodayScreen() {
     try {
       const hiddenSub = await getHiddenSubgroup();
       const weekFilter = timeEngine.getCurrentWeekType(new Date());
-      const raw = await getLessonsByDay(todayDayOfWeek);
+      const today = new Date();
+      const todayStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+      const raw = await getLessonsByDay(todayDayOfWeek, todayStr);
       const fetchedLessons = raw
-        .filter(l => l.week_type === 'ALL' || l.week_type === weekFilter)
+        .filter(l => l.exam_date || l.week_type === 'ALL' || l.week_type === weekFilter)
         .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
       setLessons(fetchedLessons);
     } catch (e) {

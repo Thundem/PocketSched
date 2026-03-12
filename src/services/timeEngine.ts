@@ -57,6 +57,13 @@ export class TimeEngine {
       const endMinutes = endH * 60 + endM;
 
       // Пара вважається активною, якщо поточний час лежить у її проміжку
+      // Для пів пари: 1пп = перші 40 хв від початку, 2пп = останні 40 хв до кінця
+      const halfMatch = lesson.lesson_type.match(/•\s*([12])\s*півпара/i);
+      if (halfMatch) {
+        return halfMatch[1] === '1'
+          ? currentMinutes >= startMinutes && currentMinutes < startMinutes + 40
+          : currentMinutes >= endMinutes - 40 && currentMinutes <= endMinutes;
+      }
       return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
     }) || null;
   }

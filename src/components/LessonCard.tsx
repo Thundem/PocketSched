@@ -6,6 +6,24 @@ import { Lesson, WeekType } from '../db/schema';
 import { Ionicons } from '@expo/vector-icons';
 import { deleteLessonById, updateLesson } from '../db/database';
 
+/** Додає хвилини до рядка часу "HH:mm" */
+function addMinutes(time: string, mins: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const total = h * 60 + m + mins;
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+/** Повертає час відображення для пари/пів пари.
+ * 1 півпара = перші 40 хв від початку, 2 — останні 40 хв до кінця. */
+function getDisplayTimes(lesson: Lesson): { start: string; end: string } {
+  const halfMatch = lesson.lesson_type.match(/•\s*([12])\s*півпара/i);
+  if (!halfMatch) return { start: lesson.start_time, end: lesson.end_time };
+  if (halfMatch[1] === '1') return { start: lesson.start_time, end: addMinutes(lesson.start_time, 40) };
+  return { start: addMinutes(lesson.end_time, -40), end: lesson.end_time };
+}
+
 /** Скорочує повне ім'я викладача до формату "Прізвище І.П."
  * Напр.: "доцент Іваненко Іван Петрович" → "Іваненко І.П." */
 function abbreviateTeacher(name: string): string {
@@ -35,6 +53,7 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
   const [dayPickerVisible, setDayPickerVisible] = useState(false);
 
   const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+  const dispTimes = getDisplayTimes(lesson);
 
   const handleDelete = () => {
     setDetailVisible(false);
@@ -71,15 +90,15 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
       {isActive && <View style={styles.activeIndicator} />}
       
       <View style={styles.timeColumn}>
-        <Text style={[styles.timeText, isActive && styles.timeTextActive]}>{lesson.start_time}</Text>
-        <Text style={styles.timeTextEnd}>{lesson.end_time}</Text>
+        <Text style={[styles.timeText, isActive && styles.timeTextActive]}>{dispTimes.start}</Text>
+        <Text style={styles.timeTextEnd}>{dispTimes.end}</Text>
       </View>
 
       <View style={styles.contentColumn}>
         <View style={styles.headerRow}>
           <Text style={styles.subjectName} numberOfLines={2}>{lesson.subject_name}</Text>
           <View style={styles.badgeContainer}>
-            <View style={styles.typeBadge}>
+            <View style={[styles.typeBadge, lesson.lesson_type === 'Екзамен' && { backgroundColor: '#B71C1C' }]}>
               <Text style={styles.typeText}>{lesson.lesson_type}</Text>
             </View>
             {lesson.week_type !== 'ALL' && (
@@ -126,8 +145,14 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
 
           <View style={styles.modalRow}>
             <Ionicons name="time-outline" size={18} color={colors.inactive} />
-            <Text style={styles.modalInfoText}>{lesson.start_time} – {lesson.end_time}</Text>
+            <Text style={styles.modalInfoText}>{dispTimes.start} – {dispTimes.end}</Text>
           </View>
+          {lesson.exam_date ? (
+            <View style={styles.modalRow}>
+              <Ionicons name="calendar-outline" size={18} color={colors.inactive} />
+              <Text style={styles.modalInfoText}>{lesson.exam_date}</Text>
+            </View>
+          ) : null}
           <View style={styles.modalRow}>
             <Ionicons name="school-outline" size={18} color={colors.inactive} />
             <Text style={styles.modalInfoText}>{lesson.lesson_type}</Text>
@@ -155,48 +180,52 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
             </View>
           ) : null}
 
-          {/* Швидка зміна типу тижня */}
-          <View style={styles.weekTypeRow}>
-            <Text style={styles.weekTypeLabel}>Тиждень:</Text>
-            {([{ val: 'ALL', label: 'Кожен' }, { val: 'NUMERATOR', label: 'Чисельник' }, { val: 'DENOMINATOR', label: 'Знаменник' }] as { val: WeekType; label: string }[]).map(({ val, label }) => (
-              <TouchableOpacity
-                key={val}
-                style={[styles.weekTypeBtn, lesson.week_type === val && styles.weekTypeBtnActive]}
-                onPress={async () => {
-                  await updateLesson({ ...lesson, week_type: val });
-                  if (onDeleteSuccess) onDeleteSuccess();
-                  setDetailVisible(false);
-                }}
-              >
-                <Text style={[styles.weekTypeBtnText, lesson.week_type === val && styles.weekTypeBtnTextActive]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {!lesson.exam_date && (
+            <>
+              {/* Швидка зміна типу тижня */}
+              <View style={styles.weekTypeRow}>
+                <Text style={styles.weekTypeLabel}>Тиждень:</Text>
+                {([{ val: 'ALL', label: 'Кожен' }, { val: 'NUMERATOR', label: 'Чисельник' }, { val: 'DENOMINATOR', label: 'Знаменник' }] as { val: WeekType; label: string }[]).map(({ val, label }) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[styles.weekTypeBtn, lesson.week_type === val && styles.weekTypeBtnActive]}
+                    onPress={async () => {
+                      await updateLesson({ ...lesson, week_type: val });
+                      if (onDeleteSuccess) onDeleteSuccess();
+                      setDetailVisible(false);
+                    }}
+                  >
+                    <Text style={[styles.weekTypeBtnText, lesson.week_type === val && styles.weekTypeBtnTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-          {/* Перенести на інший день */}
-          <View style={styles.weekTypeRow}>
-            <Text style={styles.weekTypeLabel}>День:</Text>
-            {DAY_NAMES.map((name, idx) => {
-              const dayNum = idx + 1;
-              return (
-                <TouchableOpacity
-                  key={dayNum}
-                  style={[styles.weekTypeBtn, lesson.day_of_week === dayNum && styles.weekTypeBtnActive]}
-                  onPress={async () => {
-                    await updateLesson({ ...lesson, day_of_week: dayNum });
-                    if (onDeleteSuccess) onDeleteSuccess();
-                    setDetailVisible(false);
-                  }}
-                >
-                  <Text style={[styles.weekTypeBtnText, lesson.day_of_week === dayNum && styles.weekTypeBtnTextActive]}>
-                    {name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+              {/* Перенести на інший день */}
+              <View style={styles.weekTypeRow}>
+                <Text style={styles.weekTypeLabel}>День:</Text>
+                {DAY_NAMES.map((name, idx) => {
+                  const dayNum = idx + 1;
+                  return (
+                    <TouchableOpacity
+                      key={dayNum}
+                      style={[styles.weekTypeBtn, lesson.day_of_week === dayNum && styles.weekTypeBtnActive]}
+                      onPress={async () => {
+                        await updateLesson({ ...lesson, day_of_week: dayNum });
+                        if (onDeleteSuccess) onDeleteSuccess();
+                        setDetailVisible(false);
+                      }}
+                    >
+                      <Text style={[styles.weekTypeBtnText, lesson.day_of_week === dayNum && styles.weekTypeBtnTextActive]}>
+                        {name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
           <View style={styles.modalActions}>
             <TouchableOpacity

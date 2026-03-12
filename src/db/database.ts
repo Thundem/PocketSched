@@ -31,6 +31,10 @@ export const initDb = (): Promise<void> => {
         week_type TEXT NOT NULL
       );
     `);
+    // Міграція: додаємо exam_date якщо якщо ще немає
+    try {
+      await _dbInstance.execAsync(`ALTER TABLE lessons ADD COLUMN exam_date TEXT DEFAULT NULL`);
+    } catch {}
   })();
   return _initPromise;
 };
@@ -48,8 +52,8 @@ export const insertLesson = async (lesson: Lesson) => {
   }
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO lessons (id, subject_name, lesson_type, teacher, room_or_link, start_time, end_time, day_of_week, subgroup, week_type) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO lessons (id, subject_name, lesson_type, teacher, room_or_link, start_time, end_time, day_of_week, subgroup, week_type, exam_date) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       lesson.id,
       lesson.subject_name,
@@ -61,20 +65,30 @@ export const insertLesson = async (lesson: Lesson) => {
       lesson.day_of_week,
       lesson.subgroup || null,
       lesson.week_type,
+      lesson.exam_date || null,
     ]
   );
 };
 
-export const getLessonsByDay = async (day_of_week: number): Promise<Lesson[]> => {
+export const getLessonsByDay = async (day_of_week: number, dateStr?: string): Promise<Lesson[]> => {
   if (Platform.OS === 'web') {
-    return webMockDatabase.filter(l => l.day_of_week === day_of_week).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const lessons = webMockDatabase
+      .filter(l => l.day_of_week === day_of_week && !l.exam_date)
+      .sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const exams = dateStr ? webMockDatabase.filter(l => l.exam_date === dateStr) : [];
+    return [...lessons, ...exams].sort((a, b) => a.start_time.localeCompare(b.start_time));
   }
   const db = await getDb();
-  const allRows = await db.getAllAsync<Lesson>(
-    `SELECT * FROM lessons WHERE day_of_week = ? ORDER BY start_time ASC`,
+  if (dateStr) {
+    return db.getAllAsync<Lesson>(
+      `SELECT * FROM lessons WHERE (day_of_week = ? AND (exam_date IS NULL OR exam_date = '')) OR exam_date = ? ORDER BY start_time ASC`,
+      [day_of_week, dateStr]
+    );
+  }
+  return db.getAllAsync<Lesson>(
+    `SELECT * FROM lessons WHERE day_of_week = ? AND (exam_date IS NULL OR exam_date = '') ORDER BY start_time ASC`,
     [day_of_week]
   );
-  return allRows;
 };
 
 export const getAllLessons = async (): Promise<Lesson[]> => {
@@ -104,11 +118,11 @@ export const clearAllLessons = async () => {
 
 export const clearLessonsByDay = async (day_of_week: number) => {
   if (Platform.OS === 'web') {
-    webMockDatabase = webMockDatabase.filter(l => l.day_of_week !== day_of_week);
+    webMockDatabase = webMockDatabase.filter(l => l.day_of_week !== day_of_week || !!l.exam_date);
     return;
   }
   const db = await getDb();
-  await db.runAsync('DELETE FROM lessons WHERE day_of_week = ?', [day_of_week]);
+  await db.runAsync(`DELETE FROM lessons WHERE day_of_week = ? AND (exam_date IS NULL OR exam_date = '')`, [day_of_week]);
 };
 
 export const deleteLessonById = async (id: string) => {
@@ -131,7 +145,7 @@ export const updateLesson = async (lesson: Lesson) => {
   const db = await getDb();
   await db.runAsync(
     `UPDATE lessons 
-     SET subject_name = ?, lesson_type = ?, teacher = ?, room_or_link = ?, start_time = ?, end_time = ?, day_of_week = ?, subgroup = ?, week_type = ? 
+     SET subject_name = ?, lesson_type = ?, teacher = ?, room_or_link = ?, start_time = ?, end_time = ?, day_of_week = ?, subgroup = ?, week_type = ?, exam_date = ?
      WHERE id = ?`,
     [
       lesson.subject_name,
@@ -143,6 +157,7 @@ export const updateLesson = async (lesson: Lesson) => {
       lesson.day_of_week,
       lesson.subgroup || null,
       lesson.week_type,
+      lesson.exam_date || null,
       lesson.id
     ]
   );

@@ -28,18 +28,39 @@ export default function WeekScreen() {
     try {
       const hiddenSub = await getHiddenSubgroup();
       const rawLessons = await getAllLessons();
-      const allLessons = rawLessons
+
+      // Дати поточного/наступного тижня (Пн–Нд)
+      const today = new Date();
+      const dow = today.getDay() === 0 ? 7 : today.getDay();
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - (dow - 1) + (isNextWeek ? 7 : 0));
+      const fmt = (d: Date) =>
+        `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+      const weekDates = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        return fmt(d);
+      });
+
+      const regularLessons = rawLessons
+        .filter(l => !l.exam_date)
         .filter(l => l.week_type === 'ALL' || l.week_type === weekFilter)
         .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
-      
-      // Групуємо уроки по днях тижня
+
+      const exams = rawLessons
+        .filter(l => l.exam_date && weekDates.includes(l.exam_date))
+        .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
+
+      // Групуємо по днях тижня
       const groups = DAYS_OF_WEEK.map((dayName, index) => {
         const dayNum = index + 1;
+        const dayExams = exams.filter(l => l.exam_date === weekDates[index]);
+        const dayLessons = regularLessons.filter(l => l.day_of_week === dayNum);
         return {
           title: dayName,
-          data: allLessons.filter(l => l.day_of_week === dayNum)
+          data: [...dayLessons, ...dayExams].sort((a, b) => a.start_time.localeCompare(b.start_time)),
         };
-      }).filter(group => group.data.length > 0); // Показуємо тільки дні, де є пари
+      }).filter(group => group.data.length > 0);
 
       setSections(groups);
     } catch (e) {

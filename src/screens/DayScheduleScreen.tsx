@@ -47,9 +47,10 @@ export default function DayScheduleScreen() {
       const targetDate = new Date();
       if (isTomorrow) targetDate.setDate(targetDate.getDate() + 1);
       const weekFilter = timeEngine.getCurrentWeekType(targetDate);
-      const raw = await getLessonsByDay(targetDayOfWeek);
+      const dateStr = `${String(targetDate.getDate()).padStart(2, '0')}.${String(targetDate.getMonth() + 1).padStart(2, '0')}.${targetDate.getFullYear()}`;
+      const raw = await getLessonsByDay(targetDayOfWeek, dateStr);
       const fetchedLessons = raw
-        .filter(l => l.week_type === 'ALL' || l.week_type === weekFilter)
+        .filter(l => l.exam_date || l.week_type === 'ALL' || l.week_type === weekFilter)
         .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
       setLessons(fetchedLessons);
       updateActiveLesson(fetchedLessons);
