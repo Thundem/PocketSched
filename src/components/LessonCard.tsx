@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Animated } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { Lesson, WeekType } from '../db/schema';
 import { Ionicons } from '@expo/vector-icons';
-import { deleteLessonById, updateLesson } from '../db/database';
+import { deleteLessonById, updateLesson, insertOverride } from '../db/database';
 
 /** Додає хвилини до рядка часу "HH:mm" */
 function addMinutes(time: string, mins: number): string {
@@ -44,13 +44,39 @@ function abbreviateTeacher(name: string): string {
 interface Props {
   lesson: Lesson;
   isActive?: boolean;
-  onDeleteSuccess?: () => void; 
+  onDeleteSuccess?: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  displayDate?: string;
+  isReordering?: boolean;
+  drag?: () => void;
 }
 
-export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props) {
+export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp, onMoveDown, displayDate, isReordering, drag }: Props) {
   const navigation = useNavigation<any>();
   const [detailVisible, setDetailVisible] = useState(false);
-  const [dayPickerVisible, setDayPickerVisible] = useState(false);
+  const [overridePickerVisible, setOverridePickerVisible] = useState(false);
+  const [overrideNewDay, setOverrideNewDay] = useState(lesson.day_of_week);
+
+  // Ефект трясіння при режимі переміщення
+  const jiggle = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (isReordering) {
+      const anim = Animated.loop(
+        Animated.sequence([
+          Animated.timing(jiggle, { toValue: 1, duration: 75, useNativeDriver: true }),
+          Animated.timing(jiggle, { toValue: -1, duration: 75, useNativeDriver: true }),
+          Animated.timing(jiggle, { toValue: 0.8, duration: 75, useNativeDriver: true }),
+          Animated.timing(jiggle, { toValue: -0.8, duration: 75, useNativeDriver: true }),
+        ])
+      );
+      anim.start();
+      return () => { anim.stop(); jiggle.setValue(0); };
+    } else {
+      jiggle.setValue(0);
+    }
+  }, [isReordering]);
+  const jiggleRotate = jiggle.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-2.5deg', '0deg', '2.5deg'] });
 
   const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
   const dispTimes = getDisplayTimes(lesson);
@@ -81,10 +107,12 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
 
   return (
     <>
+    <Animated.View style={{ transform: [{ rotate: jiggleRotate }] }}>
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={() => setDetailVisible(true)}
-      onLongPress={() => setDayPickerVisible(true)}
+      onLongPress={drag}
+      delayLongPress={300}
       style={[styles.card, isActive && styles.cardActive]}
     >
       {isActive && <View style={styles.activeIndicator} />}
@@ -127,6 +155,7 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
         </View>
       </View>
     </TouchableOpacity>
+    </Animated.View>
 
     <Modal
       visible={detailVisible}
@@ -182,6 +211,26 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
 
           {!lesson.exam_date && (
             <>
+              {/* Підгрупа */}
+              <View style={styles.weekTypeRow}>
+                <Text style={styles.weekTypeLabel}>Підгрупа:</Text>
+                {([{ val: '', label: 'Обидві' }, { val: '1', label: '1пг' }, { val: '2', label: '2пг' }]).map(({ val, label }) => (
+                  <TouchableOpacity
+                    key={val || 'all'}
+                    style={[styles.weekTypeBtn, (lesson.subgroup || '') === val && styles.weekTypeBtnActive]}
+                    onPress={async () => {
+                      await updateLesson({ ...lesson, subgroup: val || undefined });
+                      if (onDeleteSuccess) onDeleteSuccess();
+                      setDetailVisible(false);
+                    }}
+                  >
+                    <Text style={[styles.weekTypeBtnText, (lesson.subgroup || '') === val && styles.weekTypeBtnTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
               {/* Швидка зміна типу тижня */}
               <View style={styles.weekTypeRow}>
                 <Text style={styles.weekTypeLabel}>Тиждень:</Text>
@@ -224,6 +273,36 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
                   );
                 })}
               </View>
+
+              {/* Порядок у розкладі */}
+              {(onMoveUp || onMoveDown) && (
+                <View style={styles.weekTypeRow}>
+                  <Text style={styles.weekTypeLabel}>Порядок:</Text>
+                  <TouchableOpacity
+                    style={[styles.weekTypeBtn, !onMoveUp && { opacity: 0.3 }]}
+                    disabled={!onMoveUp}
+                    onPress={() => { onMoveUp?.(); setDetailVisible(false); }}
+                  >
+                    <Ionicons name="arrow-up" size={16} color={onMoveUp ? colors.onSurface : colors.inactive} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.weekTypeBtn, !onMoveDown && { opacity: 0.3 }]}
+                    disabled={!onMoveDown}
+                    onPress={() => { onMoveDown?.(); setDetailVisible(false); }}
+                  >
+                    <Ionicons name="arrow-down" size={16} color={onMoveDown ? colors.onSurface : colors.inactive} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Одноразовий перенос */}
+              <TouchableOpacity
+                style={styles.overrideBtn}
+                onPress={() => { setOverrideNewDay(lesson.day_of_week); setOverridePickerVisible(true); }}
+              >
+                <Ionicons name="calendar-clear-outline" size={16} color={colors.primary} />
+                <Text style={styles.overrideBtnText}>Одноразово перенести...</Text>
+              </TouchableOpacity>
             </>
           )}
 
@@ -243,6 +322,69 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess }: Props)
               <Text style={styles.modalBtnText}>Видалити</Text>
             </TouchableOpacity>
           </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+
+    {/* Модал одноразового переносу */}
+    <Modal
+      visible={overridePickerVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setOverridePickerVisible(false)}
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setOverridePickerVisible(false)}
+      >
+        <TouchableOpacity activeOpacity={1} style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <Text style={styles.modalSubject}>Одноразовий перенос</Text>
+          <Text style={styles.overrideHint}>«{lesson.subject_name}» цього разу відбудеться у:</Text>
+          <View style={[styles.weekTypeRow, { marginTop: 16 }]}>
+            {DAY_NAMES.map((name, idx) => {
+              const dayNum = idx + 1;
+              return (
+                <TouchableOpacity
+                  key={dayNum}
+                  style={[styles.weekTypeBtn, overrideNewDay === dayNum && styles.weekTypeBtnActive]}
+                  onPress={() => setOverrideNewDay(dayNum)}
+                >
+                  <Text style={[styles.weekTypeBtnText, overrideNewDay === dayNum && styles.weekTypeBtnTextActive]}>
+                    {name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity
+            style={[styles.modalBtnEdit, { marginTop: 20 }]}
+            onPress={async () => {
+              // Обчислюємо original_date: дата цього тижня, коли пара мала відбутися
+              const base = displayDate ? (() => {
+                const [d, m, y] = displayDate.split('.').map(Number);
+                return new Date(y, m - 1, d);
+              })() : new Date();
+              const baseDow = base.getDay() === 0 ? 7 : base.getDay();
+              const orig = new Date(base);
+              orig.setDate(base.getDate() + (lesson.day_of_week - baseDow));
+              const p = (n: number) => String(n).padStart(2, '0');
+              const originalDate = `${p(orig.getDate())}.${p(orig.getMonth() + 1)}.${orig.getFullYear()}`;
+              await insertOverride({
+                id: Math.random().toString(36).slice(2),
+                lesson_id: lesson.id,
+                original_date: originalDate,
+                new_day_of_week: overrideNewDay,
+              });
+              setOverridePickerVisible(false);
+              setDetailVisible(false);
+              if (onDeleteSuccess) onDeleteSuccess();
+            }}
+          >
+            <Ionicons name="checkmark-outline" size={20} color="#fff" />
+            <Text style={styles.modalBtnText}>Зберегти</Text>
+          </TouchableOpacity>
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -453,5 +595,24 @@ const styles = StyleSheet.create({
   },
   weekTypeBtnTextActive: {
     color: colors.primary,
+  },
+  overrideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    marginTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.separator,
+  },
+  overrideBtnText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  overrideHint: {
+    color: colors.onSurface,
+    fontSize: 14,
+    marginBottom: 4,
   },
 });

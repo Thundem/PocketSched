@@ -4,7 +4,7 @@ import { useFocusEffect, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { Lesson, WeekType } from '../db/schema';
 import LessonCard from '../components/LessonCard';
-import { getAllLessons } from '../db/database';
+import { getAllLessons, getOverridesForWeek, updateSortOrders } from '../db/database';
 import { getHiddenSubgroup } from '../services/settings';
 import { TimeEngine } from '../services/timeEngine';
 
@@ -22,6 +22,7 @@ export default function WeekScreen() {
 
   const [sections, setSections] = useState<{title: string, data: Lesson[]}[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [sectionWeekDates, setSectionWeekDates] = useState<string[]>([]);
 
   const fetchWeekLessons = async () => {
     setIsLoading(true);
@@ -41,26 +42,41 @@ export default function WeekScreen() {
         d.setDate(weekStart.getDate() + i);
         return fmt(d);
       });
+      setSectionWeekDates(weekDates);
+
+      // Одноразові переноси
+      const overrides = await getOverridesForWeek(weekDates);
+      const movedAwayIds = new Set(overrides.map(o => o.lesson_id));
+      const movedHereByDay = new Map<number, string[]>();
+      overrides.forEach(o => {
+        if (!movedHereByDay.has(o.new_day_of_week)) movedHereByDay.set(o.new_day_of_week, []);
+        movedHereByDay.get(o.new_day_of_week)!.push(o.lesson_id);
+      });
 
       const regularLessons = rawLessons
-        .filter(l => !l.exam_date)
+        .filter(l => !l.exam_date && !movedAwayIds.has(l.id))
         .filter(l => l.week_type === 'ALL' || l.week_type === weekFilter)
         .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
 
       const exams = rawLessons
-        .filter(l => l.exam_date && weekDates.includes(l.exam_date))
+        .filter(l => l.exam_date && weekDates.includes(l.exam_date!) && !movedAwayIds.has(l.id))
         .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
 
-      // Групуємо по днях тижня
       const groups = DAYS_OF_WEEK.map((dayName, index) => {
         const dayNum = index + 1;
         const dayExams = exams.filter(l => l.exam_date === weekDates[index]);
         const dayLessons = regularLessons.filter(l => l.day_of_week === dayNum);
-        return {
-          title: dayName,
-          data: [...dayLessons, ...dayExams].sort((a, b) => a.start_time.localeCompare(b.start_time)),
-        };
-      }).filter(group => group.data.length > 0);
+        const movedHereIds = movedHereByDay.get(dayNum) || [];
+        const dayMoved = rawLessons.filter(l =>
+          movedHereIds.includes(l.id) && !l.exam_date && (!hiddenSub || l.subgroup !== hiddenSub)
+        );
+        const all = [...dayLessons, ...dayMoved, ...dayExams];
+        all.sort((a, b) => {
+          const sa = a.sort_order ?? Infinity, sb = b.sort_order ?? Infinity;
+          return sa !== sb ? sa - sb : a.start_time.localeCompare(b.start_time);
+        });
+        return { title: dayName, data: all };
+      }).filter(g => g.data.length > 0);
 
       setSections(groups);
     } catch (e) {
@@ -68,6 +84,14 @@ export default function WeekScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleMoveInSection = async (dayData: Lesson[], fromIdx: number, toIdx: number) => {
+    const newList = [...dayData];
+    [newList[fromIdx], newList[toIdx]] = [newList[toIdx], newList[fromIdx]];
+    const updates = newList.map((l, i) => ({ id: l.id, sort_order: i * 10 }));
+    await updateSortOrders(updates);
+    fetchWeekLessons();
   };
 
   useFocusEffect(
@@ -103,12 +127,19 @@ export default function WeekScreen() {
             <Text style={styles.headerText}>{title}</Text>
           </View>
         )}
-        renderItem={({ item }) => (
-          <LessonCard 
-            lesson={item} 
-            onDeleteSuccess={fetchWeekLessons} 
-          />
-        )}
+        renderItem={({ item, index, section }) => {
+          const dayIdx = DAYS_OF_WEEK.indexOf(section.title);
+          const displayDate = sectionWeekDates[dayIdx] ?? '';
+          return (
+            <LessonCard
+              lesson={item}
+              onDeleteSuccess={fetchWeekLessons}
+              displayDate={displayDate}
+              onMoveUp={index > 0 ? () => handleMoveInSection(section.data, index, index - 1) : undefined}
+              onMoveDown={index < section.data.length - 1 ? () => handleMoveInSection(section.data, index, index + 1) : undefined}
+            />
+          );
+        }}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={renderEmptyState}
         stickySectionHeadersEnabled={false}

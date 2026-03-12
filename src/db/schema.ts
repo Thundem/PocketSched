@@ -12,4 +12,12 @@ export interface Lesson {
   subgroup?: string;
   week_type: WeekType;
   exam_date?: string | null; // 'DD.MM.YYYY' — лише для екзаменів, null для звичайних пар
+  sort_order?: number | null;
+}
+
+export interface LessonOverride {
+  id: string;
+  lesson_id: string;
+  original_date: string;   // DD.MM.YYYY — коли пара мала відбутися
+  new_day_of_week: number; // куди перенесено (у тому ж тижні)
 }

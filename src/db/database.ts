@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import { Platform } from 'react-native';
-import { Lesson } from './schema';
+import { Lesson, LessonOverride } from './schema';
 
 // Заглушка (Mock) для WEB-версії
 let webMockDatabase: Lesson[] = [];
@@ -31,10 +31,23 @@ export const initDb = (): Promise<void> => {
         week_type TEXT NOT NULL
       );
     `);
-    // Міграція: додаємо exam_date якщо якщо ще немає
+    // Міграція: додаємо exam_date якщо ще немає
     try {
       await _dbInstance.execAsync(`ALTER TABLE lessons ADD COLUMN exam_date TEXT DEFAULT NULL`);
     } catch {}
+    // Міграція: sort_order (ручне впорядкування)
+    try {
+      await _dbInstance.execAsync(`ALTER TABLE lessons ADD COLUMN sort_order INTEGER DEFAULT NULL`);
+    } catch {}
+    // Таблиця одноразових переносів
+    await _dbInstance.execAsync(`
+      CREATE TABLE IF NOT EXISTS lesson_overrides (
+        id TEXT PRIMARY KEY NOT NULL,
+        lesson_id TEXT NOT NULL,
+        original_date TEXT NOT NULL,
+        new_day_of_week INTEGER NOT NULL
+      );
+    `);
   })();
   return _initPromise;
 };
@@ -52,8 +65,9 @@ export const insertLesson = async (lesson: Lesson) => {
   }
   const db = await getDb();
   await db.runAsync(
-    `INSERT INTO lessons (id, subject_name, lesson_type, teacher, room_or_link, start_time, end_time, day_of_week, subgroup, week_type, exam_date) 
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO lessons (id, subject_name, lesson_type, teacher, room_or_link, start_time, end_time, day_of_week, subgroup, week_type, exam_date, sort_order) 
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+
     [
       lesson.id,
       lesson.subject_name,
@@ -66,6 +80,7 @@ export const insertLesson = async (lesson: Lesson) => {
       lesson.subgroup || null,
       lesson.week_type,
       lesson.exam_date || null,
+      lesson.sort_order ?? null,
     ]
   );
 };
@@ -102,7 +117,7 @@ export const getAllLessons = async (): Promise<Lesson[]> => {
   }
   const db = await getDb();
   const allRows = await db.getAllAsync<Lesson>(
-    `SELECT * FROM lessons ORDER BY day_of_week ASC, start_time ASC`
+    `SELECT * FROM lessons ORDER BY day_of_week ASC, CASE WHEN sort_order IS NULL THEN 1 ELSE 0 END ASC, sort_order ASC, start_time ASC`
   );
   return allRows;
 };
@@ -145,8 +160,9 @@ export const updateLesson = async (lesson: Lesson) => {
   const db = await getDb();
   await db.runAsync(
     `UPDATE lessons 
-     SET subject_name = ?, lesson_type = ?, teacher = ?, room_or_link = ?, start_time = ?, end_time = ?, day_of_week = ?, subgroup = ?, week_type = ?, exam_date = ?
+     SET subject_name = ?, lesson_type = ?, teacher = ?, room_or_link = ?, start_time = ?, end_time = ?, day_of_week = ?, subgroup = ?, week_type = ?, exam_date = ?, sort_order = ?
      WHERE id = ?`,
+
     [
       lesson.subject_name,
       lesson.lesson_type,
@@ -158,8 +174,49 @@ export const updateLesson = async (lesson: Lesson) => {
       lesson.subgroup || null,
       lesson.week_type,
       lesson.exam_date || null,
+      lesson.sort_order ?? null,
       lesson.id
     ]
   );
+};
+
+export const updateSortOrders = async (items: { id: string; sort_order: number }[]) => {
+  if (Platform.OS === 'web') return;
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    for (const item of items) {
+      await db.runAsync('UPDATE lessons SET sort_order = ? WHERE id = ?', [item.sort_order, item.id]);
+    }
+  });
+};
+
+export const insertOverride = async (override: LessonOverride) => {
+  if (Platform.OS === 'web') return;
+  const db = await getDb();
+  // Видаляємо попередній переніс для тієї ж пари + тієї ж дати
+  await db.runAsync(
+    'DELETE FROM lesson_overrides WHERE lesson_id = ? AND original_date = ?',
+    [override.lesson_id, override.original_date]
+  );
+  await db.runAsync(
+    'INSERT INTO lesson_overrides (id, lesson_id, original_date, new_day_of_week) VALUES (?, ?, ?, ?)',
+    [override.id, override.lesson_id, override.original_date, override.new_day_of_week]
+  );
+};
+
+export const getOverridesForWeek = async (weekDates: string[]): Promise<LessonOverride[]> => {
+  if (Platform.OS === 'web' || weekDates.length === 0) return [];
+  const db = await getDb();
+  const placeholders = weekDates.map(() => '?').join(',');
+  return db.getAllAsync<LessonOverride>(
+    `SELECT * FROM lesson_overrides WHERE original_date IN (${placeholders})`,
+    weekDates
+  );
+};
+
+export const deleteOverridesForLesson = async (lessonId: string) => {
+  if (Platform.OS === 'web') return;
+  const db = await getDb();
+  await db.runAsync('DELETE FROM lesson_overrides WHERE lesson_id = ?', [lessonId]);
 };
 

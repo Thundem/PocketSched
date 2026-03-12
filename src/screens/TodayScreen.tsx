@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
 import { colors } from '../theme/colors';
 import { Lesson } from '../db/schema';
 import LessonCard from '../components/LessonCard';
-import { getLessonsByDay, insertLesson, clearAllLessons } from '../db/database';
+import { insertLesson, clearAllLessons, getAllLessons, getOverridesForWeek, updateSortOrders } from '../db/database';
 import { getHiddenSubgroup } from '../services/settings';
 import { TimeEngine } from '../services/timeEngine';
 import * as ImagePicker from 'expo-image-picker';
@@ -11,30 +12,58 @@ import { processScheduleImage } from '../services/ocrScanner';
 
 const timeEngine = new TimeEngine();
 
+function getWeekDates(baseDate = new Date()): string[] {
+  const dow = baseDate.getDay() === 0 ? 7 : baseDate.getDay();
+  const monday = new Date(baseDate);
+  monday.setDate(baseDate.getDate() - (dow - 1));
+  const fmt = (d: Date) => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+  return Array.from({length: 7}, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return fmt(d); });
+}
+
 export default function TodayScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeLessonId, setActiveLessonId] = useState<string>('');
+  const [isReordering, setIsReordering] = useState(false);
 
   const todayDayOfWeek = new Date().getDay() === 0 ? 7 : new Date().getDay();
+  const _today = new Date();
+  const todayStr = `${String(_today.getDate()).padStart(2,'0')}.${String(_today.getMonth()+1).padStart(2,'0')}.${_today.getFullYear()}`;
 
   const fetchLessons = async () => {
     setIsLoading(true);
     try {
       const hiddenSub = await getHiddenSubgroup();
       const weekFilter = timeEngine.getCurrentWeekType(new Date());
-      const today = new Date();
-      const todayStr = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
-      const raw = await getLessonsByDay(todayDayOfWeek, todayStr);
-      const fetchedLessons = raw
-        .filter(l => l.exam_date || l.week_type === 'ALL' || l.week_type === weekFilter)
-        .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
+      const allLessons = await getAllLessons();
+      const overrides = await getOverridesForWeek(getWeekDates(new Date()));
+      const movedAwayIds = new Set(overrides.filter(o => o.original_date === todayStr).map(o => o.lesson_id));
+      const movedHereMap = new Map(overrides.filter(o => o.new_day_of_week === todayDayOfWeek).map(o => [o.lesson_id, o]));
+      const fetchedLessons = allLessons.filter(l => {
+        if (movedAwayIds.has(l.id)) return false;
+        if (l.exam_date) return l.exam_date === todayStr;
+        if (movedHereMap.has(l.id)) return !hiddenSub || l.subgroup !== hiddenSub;
+        return l.day_of_week === todayDayOfWeek &&
+          (l.week_type === 'ALL' || l.week_type === weekFilter) &&
+          (!hiddenSub || l.subgroup !== hiddenSub);
+      });
+      fetchedLessons.sort((a, b) => {
+        const sa = a.sort_order ?? Infinity, sb = b.sort_order ?? Infinity;
+        return sa !== sb ? sa - sb : a.start_time.localeCompare(b.start_time);
+      });
       setLessons(fetchedLessons);
     } catch (e) {
       console.error(e);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDragEnd = async ({ data }: { data: Lesson[] }) => {
+    setIsReordering(false);
+    const updates = data.map((l, i) => ({ id: l.id, sort_order: i * 10 }));
+    await updateSortOrders(updates);
+    setLessons(data.map((l, i) => ({ ...l, sort_order: i * 10 })));
   };
 
   useEffect(() => {
@@ -92,13 +121,23 @@ export default function TodayScreen() {
 
   return (
     <View style={styles.container}>
-      <FlatList
+      <DraggableFlatList
         data={lessons}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <LessonCard lesson={item} isActive={item.id === activeLessonId} />
+        onDragBegin={() => setIsReordering(true)}
+        onDragEnd={handleDragEnd}
+        renderItem={({ item, drag }: RenderItemParams<Lesson>) => (
+          <ScaleDecorator>
+            <LessonCard
+              lesson={item}
+              isActive={item.id === activeLessonId}
+              isReordering={isReordering}
+              drag={drag}
+              onDeleteSuccess={fetchLessons}
+              displayDate={todayStr}
+            />
+          </ScaleDecorator>
         )}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={renderEmptyState}

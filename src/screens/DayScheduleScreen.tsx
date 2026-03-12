@@ -1,15 +1,24 @@
 import React, { useState, useEffect, useCallback, useLayoutEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } from 'react-native';
 import { useFocusEffect, useRoute, useNavigation } from '@react-navigation/native';
+import DraggableFlatList, { ScaleDecorator, RenderItemParams } from 'react-native-draggable-flatlist';
 import { colors } from '../theme/colors';
 import { Lesson } from '../db/schema';
 import LessonCard from '../components/LessonCard';
-import { getLessonsByDay, clearLessonsByDay } from '../db/database';
+import { clearLessonsByDay, getAllLessons, getOverridesForWeek, updateSortOrders } from '../db/database';
 import { getHiddenSubgroup } from '../services/settings';
 import { TimeEngine } from '../services/timeEngine';
 import { Ionicons } from '@expo/vector-icons';
 
 const timeEngine = new TimeEngine();
+
+function getWeekDates(baseDate = new Date()): string[] {
+  const dow = baseDate.getDay() === 0 ? 7 : baseDate.getDay();
+  const monday = new Date(baseDate);
+  monday.setDate(baseDate.getDate() - (dow - 1));
+  const fmt = (d: Date) => `${String(d.getDate()).padStart(2,'0')}.${String(d.getMonth()+1).padStart(2,'0')}.${d.getFullYear()}`;
+  return Array.from({length: 7}, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return fmt(d); });
+}
 
 export default function DayScheduleScreen() {
   const route = useRoute();
@@ -19,6 +28,7 @@ export default function DayScheduleScreen() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeLessonId, setActiveLessonId] = useState<string>('');
+  const [isReordering, setIsReordering] = useState(false);
 
   const getTargetDayOfWeek = () => {
     let date = new Date();
@@ -30,6 +40,8 @@ export default function DayScheduleScreen() {
   };
 
   const targetDayOfWeek = getTargetDayOfWeek();
+  const _targetDateObj = (() => { const d = new Date(); if (isTomorrow) d.setDate(d.getDate() + 1); return d; })();
+  const dateStr = `${String(_targetDateObj.getDate()).padStart(2,'0')}.${String(_targetDateObj.getMonth()+1).padStart(2,'0')}.${_targetDateObj.getFullYear()}`;
 
   const updateActiveLesson = useCallback((currentLessons: Lesson[]) => {
     if (isTomorrow) {
@@ -47,11 +59,22 @@ export default function DayScheduleScreen() {
       const targetDate = new Date();
       if (isTomorrow) targetDate.setDate(targetDate.getDate() + 1);
       const weekFilter = timeEngine.getCurrentWeekType(targetDate);
-      const dateStr = `${String(targetDate.getDate()).padStart(2, '0')}.${String(targetDate.getMonth() + 1).padStart(2, '0')}.${targetDate.getFullYear()}`;
-      const raw = await getLessonsByDay(targetDayOfWeek, dateStr);
-      const fetchedLessons = raw
-        .filter(l => l.exam_date || l.week_type === 'ALL' || l.week_type === weekFilter)
-        .filter(l => !hiddenSub || l.subgroup !== hiddenSub);
+      const allLessons = await getAllLessons();
+      const overrides = await getOverridesForWeek(getWeekDates(targetDate));
+      const movedAwayIds = new Set(overrides.filter(o => o.original_date === dateStr).map(o => o.lesson_id));
+      const movedHereMap = new Map(overrides.filter(o => o.new_day_of_week === targetDayOfWeek).map(o => [o.lesson_id, o]));
+      const fetchedLessons = allLessons.filter(l => {
+        if (movedAwayIds.has(l.id)) return false;
+        if (l.exam_date) return l.exam_date === dateStr;
+        if (movedHereMap.has(l.id)) return !hiddenSub || l.subgroup !== hiddenSub;
+        return l.day_of_week === targetDayOfWeek &&
+          (l.week_type === 'ALL' || l.week_type === weekFilter) &&
+          (!hiddenSub || l.subgroup !== hiddenSub);
+      });
+      fetchedLessons.sort((a, b) => {
+        const sa = a.sort_order ?? Infinity, sb = b.sort_order ?? Infinity;
+        return sa !== sb ? sa - sb : a.start_time.localeCompare(b.start_time);
+      });
       setLessons(fetchedLessons);
       updateActiveLesson(fetchedLessons);
     } catch (e) {
@@ -59,6 +82,13 @@ export default function DayScheduleScreen() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleDragEnd = async ({ data }: { data: Lesson[] }) => {
+    setIsReordering(false);
+    const updates = data.map((l, i) => ({ id: l.id, sort_order: i * 10 }));
+    await updateSortOrders(updates);
+    setLessons(data.map((l, i) => ({ ...l, sort_order: i * 10 })));
   };
 
   useFocusEffect(
@@ -132,17 +162,22 @@ export default function DayScheduleScreen() {
 
   return (
     <View style={styles.container}>
-      <FlatList
+      <DraggableFlatList
         data={lessons}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: Lesson) => item.id}
         showsVerticalScrollIndicator={false}
-        showsHorizontalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <LessonCard
-            lesson={item}
-            isActive={item.id === activeLessonId}
-            onDeleteSuccess={fetchLessons}
-          />
+        onDragEnd={handleDragEnd}
+        renderItem={({ item, drag }: RenderItemParams<Lesson>) => (
+          <ScaleDecorator>
+            <LessonCard
+              lesson={item}
+              isActive={item.id === activeLessonId}
+              isReordering={isReordering}
+              drag={drag}
+              onDeleteSuccess={fetchLessons}
+              displayDate={dateStr}
+            />
+          </ScaleDecorator>
         )}
         contentContainerStyle={styles.listContainer}
         ListEmptyComponent={renderEmptyState}
