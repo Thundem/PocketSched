@@ -70,6 +70,10 @@ export default function DayScheduleScreen() {
         return l.day_of_week === targetDayOfWeek &&
           (l.week_type === 'ALL' || l.week_type === weekFilter) &&
           (!hiddenSub || l.subgroup !== hiddenSub);
+      }).map(l => {
+        const ov = movedHereMap.get(l.id);
+        if (!ov) return l;
+        return { ...l, start_time: ov.new_start_time ?? l.start_time, end_time: ov.new_end_time ?? l.end_time };
       });
       fetchedLessons.sort((a, b) => {
         const sa = a.sort_order ?? Infinity, sb = b.sort_order ?? Infinity;

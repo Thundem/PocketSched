@@ -48,6 +48,9 @@ export const initDb = (): Promise<void> => {
         new_day_of_week INTEGER NOT NULL
       );
     `);
+    // Міграція: новий час для одноразового переносу
+    try { await _dbInstance.execAsync(`ALTER TABLE lesson_overrides ADD COLUMN new_start_time TEXT DEFAULT NULL`); } catch {}
+    try { await _dbInstance.execAsync(`ALTER TABLE lesson_overrides ADD COLUMN new_end_time TEXT DEFAULT NULL`); } catch {}
   })();
   return _initPromise;
 };
@@ -199,8 +202,8 @@ export const insertOverride = async (override: LessonOverride) => {
     [override.lesson_id, override.original_date]
   );
   await db.runAsync(
-    'INSERT INTO lesson_overrides (id, lesson_id, original_date, new_day_of_week) VALUES (?, ?, ?, ?)',
-    [override.id, override.lesson_id, override.original_date, override.new_day_of_week]
+    'INSERT INTO lesson_overrides (id, lesson_id, original_date, new_day_of_week, new_start_time, new_end_time) VALUES (?, ?, ?, ?, ?, ?)',
+    [override.id, override.lesson_id, override.original_date, override.new_day_of_week, override.new_start_time ?? null, override.new_end_time ?? null]
   );
 };
 

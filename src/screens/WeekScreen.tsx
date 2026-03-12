@@ -47,10 +47,10 @@ export default function WeekScreen() {
       // Одноразові переноси
       const overrides = await getOverridesForWeek(weekDates);
       const movedAwayIds = new Set(overrides.map(o => o.lesson_id));
-      const movedHereByDay = new Map<number, string[]>();
+      const movedHereByDay = new Map<number, typeof overrides[number][]>();
       overrides.forEach(o => {
         if (!movedHereByDay.has(o.new_day_of_week)) movedHereByDay.set(o.new_day_of_week, []);
-        movedHereByDay.get(o.new_day_of_week)!.push(o.lesson_id);
+        movedHereByDay.get(o.new_day_of_week)!.push(o);
       });
 
       const regularLessons = rawLessons
@@ -66,10 +66,15 @@ export default function WeekScreen() {
         const dayNum = index + 1;
         const dayExams = exams.filter(l => l.exam_date === weekDates[index]);
         const dayLessons = regularLessons.filter(l => l.day_of_week === dayNum);
-        const movedHereIds = movedHereByDay.get(dayNum) || [];
-        const dayMoved = rawLessons.filter(l =>
-          movedHereIds.includes(l.id) && !l.exam_date && (!hiddenSub || l.subgroup !== hiddenSub)
-        );
+        const movedHereOvs = movedHereByDay.get(dayNum) || [];
+        const movedHereIds = movedHereOvs.map(o => o.lesson_id);
+        const dayMoved = rawLessons
+          .filter(l => movedHereIds.includes(l.id) && !l.exam_date && (!hiddenSub || l.subgroup !== hiddenSub))
+          .map(l => {
+            const ov = movedHereOvs.find(o => o.lesson_id === l.id);
+            if (!ov) return l;
+            return { ...l, start_time: ov.new_start_time ?? l.start_time, end_time: ov.new_end_time ?? l.end_time };
+          });
         const all = [...dayLessons, ...dayMoved, ...dayExams];
         all.sort((a, b) => {
           const sa = a.sort_order ?? Infinity, sb = b.sort_order ?? Infinity;

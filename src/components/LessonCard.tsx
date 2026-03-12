@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Animated, TextInput, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { Lesson, WeekType } from '../db/schema';
@@ -57,6 +57,15 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
   const [detailVisible, setDetailVisible] = useState(false);
   const [overridePickerVisible, setOverridePickerVisible] = useState(false);
   const [overrideNewDay, setOverrideNewDay] = useState(lesson.day_of_week);
+  const [overrideNewStart, setOverrideNewStart] = useState(lesson.start_time);
+  const [overrideNewEnd, setOverrideNewEnd] = useState(lesson.end_time);
+
+  const openOverridePicker = () => {
+    setOverrideNewDay(lesson.day_of_week);
+    setOverrideNewStart(dispTimes.start);
+    setOverrideNewEnd(dispTimes.end);
+    setOverridePickerVisible(true);
+  };
 
   // Ефект трясіння при режимі переміщення
   const jiggle = useRef(new Animated.Value(0)).current;
@@ -298,7 +307,7 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
               {/* Одноразовий перенос */}
               <TouchableOpacity
                 style={styles.overrideBtn}
-                onPress={() => { setOverrideNewDay(lesson.day_of_week); setOverridePickerVisible(true); }}
+                onPress={openOverridePicker}
               >
                 <Ionicons name="calendar-clear-outline" size={16} color={colors.primary} />
                 <Text style={styles.overrideBtnText}>Одноразово перенести...</Text>
@@ -342,7 +351,8 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
           <View style={styles.modalHandle} />
           <Text style={styles.modalSubject}>Одноразовий перенос</Text>
           <Text style={styles.overrideHint}>«{lesson.subject_name}» цього разу відбудеться у:</Text>
-          <View style={[styles.weekTypeRow, { marginTop: 16 }]}>
+
+          <View style={[styles.weekTypeRow, { marginTop: 12, flexWrap: 'wrap' }]}>
             {DAY_NAMES.map((name, idx) => {
               const dayNum = idx + 1;
               return (
@@ -358,8 +368,38 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
               );
             })}
           </View>
+
+          <Text style={[styles.overrideHint, { marginTop: 16 }]}>Час проведення:</Text>
+          <View style={styles.timeRow}>
+            <View style={styles.timeInputWrap}>
+              <Text style={styles.timeInputLabel}>Початок</Text>
+              <TextInput
+                style={styles.timeInput}
+                value={overrideNewStart}
+                onChangeText={setOverrideNewStart}
+                placeholder="08:30"
+                placeholderTextColor={colors.inactive}
+                keyboardType="numeric"
+                maxLength={5}
+              />
+            </View>
+            <Text style={styles.timeSeparator}>–</Text>
+            <View style={styles.timeInputWrap}>
+              <Text style={styles.timeInputLabel}>Кінець</Text>
+              <TextInput
+                style={styles.timeInput}
+                value={overrideNewEnd}
+                onChangeText={setOverrideNewEnd}
+                placeholder="10:05"
+                placeholderTextColor={colors.inactive}
+                keyboardType="numeric"
+                maxLength={5}
+              />
+            </View>
+          </View>
+
           <TouchableOpacity
-            style={[styles.modalBtnEdit, { marginTop: 20 }]}
+            style={styles.overrideSaveBtn}
             onPress={async () => {
               // Обчислюємо original_date: дата цього тижня, коли пара мала відбутися
               const base = displayDate ? (() => {
@@ -376,6 +416,8 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
                 lesson_id: lesson.id,
                 original_date: originalDate,
                 new_day_of_week: overrideNewDay,
+                new_start_time: overrideNewStart.trim() || null,
+                new_end_time: overrideNewEnd.trim() || null,
               });
               setOverridePickerVisible(false);
               setDetailVisible(false);
@@ -614,5 +656,46 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     fontSize: 14,
     marginBottom: 4,
+  },
+  overrideSaveBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 20,
+    alignSelf: 'stretch',
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 8,
+  },
+  timeInputWrap: {
+    flex: 1,
+  },
+  timeInputLabel: {
+    color: colors.inactive,
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  timeInput: {
+    backgroundColor: colors.background,
+    color: colors.onBackground,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: colors.separator,
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  timeSeparator: {
+    color: colors.inactive,
+    fontSize: 18,
+    marginTop: 20,
   },
 });

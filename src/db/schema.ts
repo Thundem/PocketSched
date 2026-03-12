@@ -20,4 +20,6 @@ export interface LessonOverride {
   lesson_id: string;
   original_date: string;   // DD.MM.YYYY — коли пара мала відбутися
   new_day_of_week: number; // куди перенесено (у тому ж тижні)
+  new_start_time?: string | null;
+  new_end_time?: string | null;
 }
