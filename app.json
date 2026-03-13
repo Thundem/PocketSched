@@ -33,7 +33,13 @@
     },
     "plugins": [
       "expo-sqlite",
-      "expo-sharing"
+      "expo-sharing",
+      [
+        "expo-font",
+        {
+          "fonts": ["node_modules/@expo/vector-icons/fonts/Ionicons.ttf"]
+        }
+      ]
     ],
     "extra": {
       "eas": {

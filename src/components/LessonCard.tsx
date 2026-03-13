@@ -176,7 +176,13 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
 
         <View style={styles.detailsRow}>
           <Ionicons name="location-outline" size={16} color={colors.inactive} />
-          <Text style={styles.detailsText} numberOfLines={1}>{lesson.room_or_link}</Text>
+          {/^https?:\/\/|^t\.me\//i.test(lesson.room_or_link ?? '') ? (
+            <TouchableOpacity onPress={() => Linking.openURL(lesson.room_or_link!)}>
+              <Text style={[styles.detailsText, styles.linkText]} numberOfLines={1}>{lesson.room_or_link}</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.detailsText} numberOfLines={1}>{lesson.room_or_link}</Text>
+          )}
         </View>
 
         <View style={styles.detailsRow}>
