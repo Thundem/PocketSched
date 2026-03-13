@@ -1,5 +1,5 @@
 import { Share } from 'react-native';
-import { File, Paths } from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getAllLessons, clearAllLessons, insertLesson } from '../db/database';
 import { getProfile } from './settings';
 import { Lesson } from '../db/schema';
@@ -23,25 +23,28 @@ export const exportSchedule = async (): Promise<void> => {
   };
   const json = JSON.stringify(payload, null, 2);
 
-  // Спробуємо поділитись файлом (потребує dev-білду)
-  try {
-    const Sharing = await import('expo-sharing');
-    const date = new Date();
-    const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
-    const fileName = `pocketsched_${stamp}.json`;
-    const file = new File(Paths.cache, fileName);
-    if (file.exists) file.delete();
-    file.write(json);
-    await Sharing.shareAsync(file.uri, {
+  // Записуємо файл і ділимось ним через нативний share-sheet.
+  // Завжди намагаємось через expo-sharing (file share), щоб Telegram
+  // відкривався як повноцінний додаток, а не вспливаючий overlay.
+  const Sharing = await import('expo-sharing');
+  const isAvailable = await Sharing.isAvailableAsync();
+
+  const date = new Date();
+  const stamp = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}_${String(date.getHours()).padStart(2, '0')}${String(date.getMinutes()).padStart(2, '0')}`;
+  const fileUri = `${FileSystem.cacheDirectory}pocketsched_${stamp}.json`;
+
+  if (isAvailable) {
+    await FileSystem.writeAsStringAsync(fileUri, json, { encoding: FileSystem.EncodingType.UTF8 });
+    // shareAsync вирішується після закриття share-sheet (не кидає при скасуванні)
+    await Sharing.shareAsync(fileUri, {
       mimeType: 'application/json',
       dialogTitle: 'Поділитися розкладом PocketSched',
       UTI: 'public.json',
     });
     return;
-  } catch (e: any) {
-    if (e?.message === 'CANCELLED') return;
-    // expo-sharing недоступний (Expo Go) — відкат до текстового Share
   }
+
+  // Expo Go або платформа без expo-sharing — відкат до текстового Share
 
   const result = await Share.share({ message: json, title: 'Розклад PocketSched' });
   if (result.action === Share.dismissedAction) {
@@ -94,6 +97,6 @@ export const importScheduleFromFile = async (): Promise<{ imported: number; prof
   }
 
   const uri = result.assets[0].uri;
-  const text = await new File(uri).text();
+  const text = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.UTF8 });
   return parseExportFile(text);
 };

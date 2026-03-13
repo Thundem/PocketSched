@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Animated, TextInput, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Modal, Animated, TextInput, ScrollView, Linking, Easing } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { Lesson, WeekType } from '../db/schema';
@@ -73,19 +73,40 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
     if (isReordering) {
       const anim = Animated.loop(
         Animated.sequence([
-          Animated.timing(jiggle, { toValue: 1, duration: 75, useNativeDriver: true }),
-          Animated.timing(jiggle, { toValue: -1, duration: 75, useNativeDriver: true }),
-          Animated.timing(jiggle, { toValue: 0.8, duration: 75, useNativeDriver: true }),
-          Animated.timing(jiggle, { toValue: -0.8, duration: 75, useNativeDriver: true }),
+          Animated.timing(jiggle, {
+            toValue: 0.35,
+            duration: 140,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.timing(jiggle, {
+            toValue: -0.35,
+            duration: 140,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
         ])
       );
       anim.start();
-      return () => { anim.stop(); jiggle.setValue(0); };
+      return () => {
+        anim.stop();
+        Animated.timing(jiggle, {
+          toValue: 0,
+          duration: 120,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }).start();
+      };
     } else {
-      jiggle.setValue(0);
+      Animated.timing(jiggle, {
+        toValue: 0,
+        duration: 120,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
     }
   }, [isReordering]);
-  const jiggleRotate = jiggle.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-2.5deg', '0deg', '2.5deg'] });
+  const jiggleRotate = jiggle.interpolate({ inputRange: [-1, 0, 1], outputRange: ['-1deg', '0deg', '1deg'] });
 
   const DAY_NAMES = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
   const dispTimes = getDisplayTimes(lesson);
@@ -201,7 +222,13 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
           </View>
           <View style={styles.modalRow}>
             <Ionicons name="location-outline" size={18} color={colors.inactive} />
-            <Text style={styles.modalInfoText}>{lesson.room_or_link}</Text>
+            {/^https?:\/\/|^t\.me\//i.test(lesson.room_or_link ?? '') ? (
+              <TouchableOpacity onPress={() => Linking.openURL(lesson.room_or_link!)}>
+                <Text style={[styles.modalInfoText, styles.linkText]}>{lesson.room_or_link}</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.modalInfoText}>{lesson.room_or_link}</Text>
+            )}
           </View>
           {lesson.subgroup ? (
             <View style={styles.modalRow}>
@@ -412,7 +439,7 @@ export default function LessonCard({ lesson, isActive, onDeleteSuccess, onMoveUp
               const p = (n: number) => String(n).padStart(2, '0');
               const originalDate = `${p(orig.getDate())}.${p(orig.getMonth() + 1)}.${orig.getFullYear()}`;
               await insertOverride({
-                id: Math.random().toString(36).slice(2),
+                id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
                 lesson_id: lesson.id,
                 original_date: originalDate,
                 new_day_of_week: overrideNewDay,
@@ -575,6 +602,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginLeft: 10,
     flex: 1,
+  },
+  linkText: {
+    color: '#4FC3F7',
+    textDecorationLine: 'underline',
   },
   modalActions: {
     flexDirection: 'row',

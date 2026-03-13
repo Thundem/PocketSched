@@ -1,8 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+
+/** TextInput що завжди показує початок тексту, а не кінець */
+function AppInput(props: React.ComponentProps<typeof TextInput>) {
+  const [sel, setSel] = useState<{ start: number; end: number } | undefined>({ start: 0, end: 0 });
+  return (
+    <TextInput
+      {...props}
+      selection={sel}
+      onFocus={(e) => { setSel(undefined); props.onFocus?.(e); }}
+      onBlur={(e) => { setSel({ start: 0, end: 0 }); props.onBlur?.(e); }}
+    />
+  );
+}
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '../theme/colors';
 import { insertLesson, updateLesson } from '../db/database';
+import { useScheduleStore } from '../stores/ScheduleContext';
 import { WeekType, Lesson } from '../db/schema';
 
 export default function AddLessonScreen() {
@@ -32,6 +46,8 @@ export default function AddLessonScreen() {
     navigation.setOptions({ title: editLesson ? 'Редагувати пару' : 'Додати пару' });
   }, [editLesson, navigation]);
 
+  const { refresh } = useScheduleStore();
+
   const handleSave = async () => {
     if (!subjectName || !startTime || !endTime || (isExam && !examDate.trim())) {
       Alert.alert('Помилка', 'Заповніть обов\'язкові поля');
@@ -40,7 +56,7 @@ export default function AddLessonScreen() {
 
     try {
       const lessonData: Lesson = {
-        id: editLesson ? editLesson.id : Math.random().toString(),
+        id: editLesson ? editLesson.id : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
         subject_name: subjectName,
         lesson_type: isExam ? 'Екзамен' : (halfPart ? `${lessonType} • ${halfPart} півпара` : lessonType),
         teacher,
@@ -57,7 +73,7 @@ export default function AddLessonScreen() {
       } else {
         await insertLesson(lessonData);
       }
-      
+      await refresh();
       navigation.goBack();
     } catch (e) {
       Alert.alert('Помилка', 'Не вдалося зберегти пару');
@@ -77,7 +93,7 @@ export default function AddLessonScreen() {
     <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false} showsHorizontalScrollIndicator={false}>
       {/* Назва */}
       <Text style={styles.label}>Назва предмету *</Text>
-      <TextInput 
+      <AppInput 
         style={styles.input} 
         placeholder="Вища математика..." 
         placeholderTextColor={colors.inactive}
@@ -88,24 +104,24 @@ export default function AddLessonScreen() {
       <View style={styles.row}>
         <View style={styles.flex1}>
           <Text style={styles.label}>Аудиторія / Лінк</Text>
-          <TextInput style={styles.input} placeholder="Ауд. 402" placeholderTextColor={colors.inactive} value={room} onChangeText={setRoom} />
+          <AppInput style={styles.input} placeholder="Ауд. 402" placeholderTextColor={colors.inactive} value={room} onChangeText={setRoom} />
         </View>
         <View style={{ width: 16 }} />
         <View style={styles.flex1}>
           <Text style={styles.label}>Викладач</Text>
-          <TextInput style={styles.input} placeholder="Іванов І.І." placeholderTextColor={colors.inactive} value={teacher} onChangeText={setTeacher} />
+          <AppInput style={styles.input} placeholder="Іванов І.І." placeholderTextColor={colors.inactive} value={teacher} onChangeText={setTeacher} />
         </View>
       </View>
 
       <View style={styles.row}>
         <View style={styles.flex1}>
           <Text style={styles.label}>Початок (HH:MM) *</Text>
-          <TextInput style={styles.input} placeholder="08:30" placeholderTextColor={colors.inactive} value={startTime} onChangeText={setStartTime} />
+          <AppInput style={styles.input} placeholder="08:30" placeholderTextColor={colors.inactive} value={startTime} onChangeText={setStartTime} />
         </View>
         <View style={{ width: 16 }} />
         <View style={styles.flex1}>
           <Text style={styles.label}>Кінець (HH:MM) *</Text>
-          <TextInput style={styles.input} placeholder="10:05" placeholderTextColor={colors.inactive} value={endTime} onChangeText={setEndTime} />
+          <AppInput style={styles.input} placeholder="10:05" placeholderTextColor={colors.inactive} value={endTime} onChangeText={setEndTime} />
         </View>
       </View>
 
@@ -137,7 +153,7 @@ export default function AddLessonScreen() {
       {isExam ? (
         <>
           <Text style={styles.label}>Дата (ДД.ММ.РРРР) *</Text>
-          <TextInput
+          <AppInput
             style={styles.input}
             placeholder="25.06.2026"
             placeholderTextColor={colors.inactive}

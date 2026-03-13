@@ -7,6 +7,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { processScheduleImage } from '../services/ocrScanner';
+import { useScheduleStore } from '../stores/ScheduleContext';
 import { colors } from '../theme/colors';
 
 const { width: SW, height: SH } = Dimensions.get('window');
@@ -84,6 +85,8 @@ export default function CropScreen() {
   const panBL = useRef(makePan(['bottom', 'left'])).current;
   const panBR = useRef(makePan(['bottom', 'right'])).current;
 
+  const { refresh } = useScheduleStore();
+
   const handleConfirm = async () => {
     setIsLoading(true);
     try {
@@ -98,6 +101,7 @@ export default function CropScreen() {
         'Успіх!',
         `Знайдено ${result.length} пар (день: ${dayLabel}).\nПерейдіть на вкладку цього дня, щоб побачити розклад.`,
       );
+      await refresh();
       navigation.goBack();
     } catch (err) {
       console.error(err);

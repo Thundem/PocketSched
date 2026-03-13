@@ -232,7 +232,7 @@ const extractLessonFromUkrText = (text: string, dayOfWeek: number): Lesson | nul
   const subjectName = words.slice(0, 10).join(' ');
 
   return {
-    id: Math.random().toString(),
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
     subject_name: subjectName.substring(0, 80),
     lesson_type: lessonType,
     teacher: teacher.length > 70 ? teacher.substring(0, 70) + '...' : teacher,

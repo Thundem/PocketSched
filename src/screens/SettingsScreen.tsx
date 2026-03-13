@@ -10,6 +10,7 @@ import {
 } from '../services/settings';
 import { TimeEngine } from '../services/timeEngine';
 import { exportSchedule, importScheduleFromFile, importScheduleFromText } from '../services/shareSchedule';
+import { useScheduleStore } from '../stores/ScheduleContext';
 
 const timeEngine = new TimeEngine();
 
@@ -19,6 +20,7 @@ const EMOJI_OPTIONS = [
 ];
 
 export default function SettingsScreen() {
+  const { refresh } = useScheduleStore();
   const [autoWeekType, setAutoWeekType] = useState<'NUMERATOR' | 'DENOMINATOR'>('NUMERATOR');
   const [hiddenSub, setHiddenSubState] = useState<HiddenSubgroup>(null);
   const [profileName, setProfileNameState] = useState('');
@@ -42,7 +44,7 @@ export default function SettingsScreen() {
   const handleHiddenSub = (val: HiddenSubgroup) => {
     const next = hiddenSub === val ? null : val;
     setHiddenSubState(next);
-    setHiddenSubgroup(next);
+    setHiddenSubgroup(next).then(() => refresh());
   };
 
   const handleNameBlur = () => {
@@ -72,6 +74,7 @@ export default function SettingsScreen() {
     try {
       const { imported, profileName: senderName } = await importScheduleFromFile();
       const from = senderName ? ` від ${senderName}` : '';
+      await refresh();
       Alert.alert('Готово', `Імпортовано ${imported} пар${from}`);
     } catch (e: any) {
       if (e?.message === 'NO_PICKER') {
@@ -94,8 +97,8 @@ export default function SettingsScreen() {
       setImportModalVisible(false);
       setImportText('');
       const from = senderName ? ` від ${senderName}` : '';
-      Alert.alert('Готово', `Імпортовано ${imported} пар${from}`);
-    } catch (e: any) {
+      await refresh();
+      Alert.alert('Готово', `Імпортовано ${imported} пар${from}`);    } catch (e: any) {
       Alert.alert('Помилка', e?.message ?? 'Не вдалось імпортувати розклад');
     } finally {
       setImporting(false);

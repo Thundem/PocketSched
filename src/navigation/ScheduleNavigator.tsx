@@ -10,6 +10,7 @@ export default function ScheduleTabs() {
   return (
     <TopTab.Navigator
       screenOptions={{
+        lazy: true,
         tabBarStyle: { backgroundColor: colors.surface },
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.inactive,

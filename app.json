@@ -15,13 +15,19 @@
       "supportsTablet": true
     },
     "android": {
+      "icon": "./assets/icon.png",
       "adaptiveIcon": {
-        "backgroundColor": "#1a1a2e",
-        "foregroundImage": "./assets/android-icon-foreground.png"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.thundem.PocketSched"
+      "package": "com.thundem.PocketSched",
+      "enableProguardInReleaseBuilds": true
     },
+    "assetBundlePatterns": [
+      "assets/*"
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     },
