@@ -30,6 +30,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate Android project if missing
+        run: |
+          if [ ! -d android ]; then
+            npx expo prebuild --platform android --non-interactive
+          fi
+
       - name: Make Gradle executable
         run: chmod +x android/gradlew
 
