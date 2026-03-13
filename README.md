@@ -43,15 +43,14 @@
 | [expo-image-picker](https://docs.expo.dev/versions/latest/sdk/imagepicker/) | Вибір фото з галереї |
 | Expo Vector Icons (`Ionicons`) | Іконки |
 
-> **Важливо:** Застосунок використовує нативні модулі і потребує **EAS Build** (профіль `preview` або `development`) — Expo Go не підтримується.
+> **Важливо:** Застосунок використовує нативні модулі і потребує **EAS Build** або локальної збірки Android — Expo Go не підтримується.
 
 ## 🚀 Запуск локально
 
 ### Передумови
 
 - [Node.js](https://nodejs.org/) (рекомендовано LTS)
-- [EAS CLI](https://docs.expo.dev/eas-update/getting-started/): `npm install -g eas-cli`
-- Встановлений білд на Android-пристрої (зібраний через EAS)
+- Для розробки: [EAS CLI](https://docs.expo.dev/eas-update/getting-started/): `npm install -g eas-cli`
 
 ### Інструкція
 
@@ -60,33 +59,49 @@
    npm install
    ```
 
-2. **Зберіть APK через EAS (хмарна збірка):**
+2. **Збірка APK:**
+   
+   **Варіант А: GitHub Actions (рекомендовано)**
+   - Репозиторій вже містить workflow [`.github/workflows/android-apk.yml`](.github/workflows/android-apk.yml).
+   - Перейдіть на GitHub → `Actions` → `Build Android APK`.
+   - Натисніть `Run workflow`.
+   - Після збірки (~25-35 хв) завантажте APK з `Artifacts`.
+   
+   **Варіант Б: EAS Build (хмарна збірка)**
    ```bash
    npx eas-cli build --profile preview --platform android
    ```
-   Після збірки завантажте та встановіть APK на телефон.
 
-3. **Для розробки — запустіть Metro Bundler:**
+3. **Встановлення APK на телефон:**
+   - Скачайте файл на телефон або передайте через USB.
+   - Відкрийте APK → дозвольте встановлення → натисніть "Встановити".
+   - Або через `adb`: `adb install -r app-release.apk`
+
+4. **Для розробки — запустіть Metro Bundler:**
    ```bash
    npx expo start --dev-client
    ```
-   Відскануйте QR-код у встановленому dev-білді (не Expo Go).
+   Відскануйте QR-код у встановленому dev-білді App'а (не Expo Go).
 
 ## 📂 Структура проекту
 
 ```
 📦 PocketSched
+ ┣ 📂 .github/workflows
+ ┃ ┗ 📜 android-apk.yml         # GitHub Actions: збірка APK
  ┣ 📂 src
  ┃ ┣ 📂 components
- ┃ ┃ ┗ 📜 LessonCard.tsx        # Картка пари + bottom sheet модаль
+ ┃ ┃ ┗ 📜 LessonCard.tsx        # Картка пари + bottom sheet модаль з посиланнями
  ┃ ┣ 📂 db
  ┃ ┃ ┣ 📜 schema.ts             # TypeScript інтерфейс Lesson
  ┃ ┃ ┗ 📜 database.ts           # CRUD операції з SQLite
+ ┃ ┣ 📂 hooks
+ ┃ ┃ ┗ 📜 useScheduleLessons.ts # Гук для фільтрування розкладу без DB запитів
  ┃ ┣ 📂 navigation
  ┃ ┃ ┣ 📜 RootNavigator.tsx     # Bottom tabs + Stack (AddLesson, CropScreen)
  ┃ ┃ ┗ 📜 ScheduleNavigator.tsx # Material Top Tabs (Сьогодні / Завтра / Тиждень)
  ┃ ┣ 📂 screens
- ┃ ┃ ┣ 📜 DayScheduleScreen.tsx # Розклад дня + FAB сканування
+ ┃ ┃ ┣ 📜 DayScheduleScreen.tsx # Розклад дня + плавне перетягування
  ┃ ┃ ┣ 📜 WeekScreen.tsx        # Перегляд тижневого розкладу
  ┃ ┃ ┣ 📜 AddLessonScreen.tsx   # Форма додавання / редагування пари
  ┃ ┃ ┣ 📜 CropScreen.tsx        # Кадрування фото перед OCR
@@ -96,32 +111,72 @@
  ┃ ┃ ┣ 📜 shareSchedule.ts      # Експорт/імпорт розкладу у файл
  ┃ ┃ ┣ 📜 settings.ts           # Профіль, прихована підгрупа (AsyncStorage)
  ┃ ┃ ┗ 📜 timeEngine.ts         # Логіка чисельника/знаменника та активної пари
+ ┃ ┣ 📂 stores
+ ┃ ┃ ┗ 📜 ScheduleContext.tsx   # Глобальне сховище для розкладу
  ┃ ┗ 📂 theme
  ┃   ┗ 📜 colors.ts             # Колірна палітра (темна тема)
- ┣ 📜 App.tsx
- ┣ 📜 app.json                  # Конфігурація Expo
+ ┣ 📂 android                   # Native Android проект з Gradle
+ ┣ 📜 App.tsx                   # Entry point + ScheduleProvider
+ ┣ 📜 app.json                  # Конфігурація Expo (адаптивна іконка, форм-фактор)
  ┣ 📜 eas.json                  # Профілі EAS Build
+ ┣ 📜 metro.config.js           # Metro bundler: inline requires
  ┗ 📜 package.json
 ```
 
+### Архітектура даних
+
+- **ScheduleContext** (`src/stores/ScheduleContext.tsx`): Глобальне сховище — завантажує дані один раз при запуску App.
+- **useScheduleLessons**: Гук для фільтрування уроків по днях — робить все у пам'яті через `useMemo`.
+- **useScheduleStore**: Простий доступ до контексту з закликом `refresh()` при змінах.
+
+## ⚡ Оптимізація
+
+- **R8 мініміз:** Видалення мертвого коду з APK (~-3-5%).
+- **Shrink resources:** Видалення невикористовуваних ресурсів (~-2-3%).
+- **Bundle compression:** Стиснення JS-бандлу (~-2MB).
+- **Hermes engine:** Швидше завантаження JS та менше пам'яті.
+- **Lazy tab loading:** Вкладки обробляються на першу потребу.
+- **Inline requires:** Модулі завантажуються при першому звертанні.
+- **arm64-v8a only:** Підтримка лише сучасної архітектури Android.
+- **Простий дизайн:** Мінімум зовнішніх бібліотек.
+
+**Розмір:** ~50-60 MB APK (release), ~100-120 MB на пристрої після встановлення.
+
 ## 📋 Статус розробки
 
-- [x] UI, навігація, темна тема
-- [x] SQLite база даних
+- [x] UI, навігація, темна тема (Material Design)
+- [x] SQLite база даних з CRUD операціями
 - [x] Time Engine (активна пара, чисельник/знаменник)
 - [x] Ручне додавання, редагування, видалення пар
-- [x] OCR-сканер з підтримкою кирилиці (OCR.space)
+- [x] OCR-сканер з підтримкою кирилиці (OCR.space API)
 - [x] Розпізнавання дня тижня, підгрупи, типу пари, півпари
 - [x] Кастомний екран кадрування фото
 - [x] Деталі пари (bottom sheet) з редагуванням/видаленням
 - [x] Профіль користувача (ім'я + emoji)
 - [x] Обмін розкладом через файл (share / import)
+- [x] Глобальне сховище даних (ScheduleContext) для уникнення повторних завантажень
+- [x] Плавне перетягування пар з еластичною анімацією
+- [x] Обробка зовнішніх посилань (Telegram, гугл-посилання) через `Linking.openURL()`
+- [x] GitHub Actions для неперервної збірки APK
 - [ ] Сповіщення перед початком пари
-- [ ] Ручне перевизначення типу тижня в налаштуваннях
+- [ ] Синхронізація розкладу (додаткова екран разом з одного пристрою на інший)
+
+## � Розробка
+
+### Запуск Expo dev client
+
+```bash
+npm install
+npx expo start --dev-client
+```
+
+Потім скануйте QR-код у встановленому dev-білді на телефоні.
+
+### Структура гілок
+
+- `main` — стабільна версія, автоматично збирається в GitHub Actions.
+- Інші гілки — розробка та тестування патчів.
 
 ## 📄 Ліцензія
 
 Проект створений для особистого використання з відкритою архітектурою.
-
-
-Швидкий мобільний застосунок для розкладу університетських занять із ручним введенням та OCR-сканером таблиць розкладу. Створений як зручна альтернатива громіздким університетським додаткам.
